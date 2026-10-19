@@ -1,0 +1,557 @@
+<!DOCTYPE html><html lang="es"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Radar"><meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#111214"><meta name="robots" content="noindex">
+<link rel="apple-touch-icon" href="radar-icon.png"><title>Radar IG</title>
+<style>
+:root{--bg:#f6f6f3;--fg:#1b1b1b;--card:#fff;--bd:#e3e3dd;--mut:#6b6b66;--pri:#5b4bff}
+@media(prefers-color-scheme:dark){:root{--bg:#111214;--fg:#ececea;--card:#1a1c1f;--bd:#2c2e32;--mut:#9a9a94}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--fg);font:15px -apple-system,system-ui,sans-serif;-webkit-text-size-adjust:100%}
+#hd{position:sticky;top:0;z-index:5;background:var(--bg);padding:calc(env(safe-area-inset-top) + 8px) 14px 8px;border-bottom:1px solid var(--bd)}
+.top{display:flex;justify-content:space-between;align-items:center;font-size:13px;margin-bottom:6px}
+.bar{height:6px;border-radius:9px;background:#8883;overflow:hidden}.bar i{display:block;height:100%}
+.warn{font-size:13px;font-weight:600;margin-top:5px}
+main{padding:12px 12px 100px}
+nav{position:fixed;left:0;right:0;bottom:0;display:flex;background:var(--card);border-top:1px solid var(--bd);padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;background:none;border:0;color:var(--mut);padding:10px 0 8px;font:inherit;font-size:11px}
+nav button b{display:block;font-size:20px;font-weight:400}nav button.on{color:var(--pri);font-weight:600}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-bottom:10px}
+.r{display:flex;gap:10px;align-items:flex-start}.row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}.row>*{flex:1;min-width:0}
+.sc{min-width:44px;height:44px;border-radius:50%;color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center}
+.hi{background:#16a34a}.md{background:#d97706}.lw{background:#9ca3af}.b{flex:1;min-width:0}
+.ch{display:inline-block;font-size:11px;padding:1px 8px;border:1px solid var(--bd);border-radius:99px;margin:3px 4px 0 0;color:var(--mut)}
+label{display:block;font-size:12px;color:var(--mut);margin:10px 0 3px}
+input,select,textarea{width:100%;font:inherit;font-size:16px;padding:9px 10px;border:1px solid var(--bd);border-radius:10px;background:var(--bg);color:var(--fg)}
+textarea{resize:vertical}
+.btn{display:block;text-align:center;text-decoration:none;font:inherit;font-weight:600;padding:12px;border:1px solid var(--bd);border-radius:12px;background:var(--card);color:var(--fg);margin-top:8px}
+.pri{background:var(--pri);color:#fff;border:0}.grn{background:#16a34a;color:#fff;border:0}.amb{background:#d97706;color:#fff;border:0}.red{color:#dc2626}
+.sm{font-size:12px;color:var(--mut);margin-top:6px}a{color:var(--pri);font-weight:600;text-decoration:none}
+#toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#000c;color:#fff;padding:8px 16px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
+h2{font-size:16px;margin:4px 0 8px}
+</style></head><body>
+<div id="hd"></div><main id="v"></main>
+<nav id="nv"><button data-n="cola"><b>▶</b>Contactar</button><button data-n="resp"><b>💬</b>Responder</button><button data-n="list"><b>📋</b>Lista</button><button data-n="mas"><b>⚙️</b>Más</button></nav>
+<div id="toast"></div>
+<script>function score(p){
+  let s=0,w=[];
+  if(p.e==="solo"){s+=30;w.push("Edita solo")}else if(p.e==="nose"){s+=15;w.push("Equipo incierto")}else if(p.e==="pro"){w.push("Es del rubro: difícil")}else{s+=2}
+  s+=(5-p.q)*5; if(p.q<=2)w.push("Edición mejorable");
+  s+={irr:15,sem:12,dia:5,rara:8}[p.fr]; if(p.fr==="irr"||p.fr==="rara")w.push("Publica poco");
+  if(p.l==1){s+=15;w.push("Contenido largo")}
+  if(p.m==1){s+=10;w.push("Monetiza")}
+  const f=p.f; s+= f>=5000&&f<=100000?10: f>=1000&&f<5000?5: f>100000?4:2;
+  if(f>=5000&&f<=100000)w.push("Tamaño ideal");
+  s+={alto:10,med:5,bajo:2}[p.g]; if(p.g==="alto")w.push("Buen engagement");
+  let v=Math.min(100,Math.round(s/110*100));
+  if(p.e==="pro")v=Math.round(v*0.35);
+  return {s:v,w};
+}
+function firstName(p){
+  const norm=x=>x.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const cap=x=>x[0].toUpperCase()+x.slice(1).toLowerCase();
+  const u=norm(p.u.replace("@","")).replace(/[^a-z]/g,"");
+  const skip=/^(dr|dra|lic|prof|mg|ing|arq|the|la|el|los|las|de|del|estudio|studio|agencia|grupo|centro|clinica|tienda|shop|team|equipo|oficial|official|consultora|academia|nutri|coach|fit|gym|club|mundo|casa|hola|legal|abogados|abogada|abogado|salud|marketing|negocios|inmobiliaria|belleza|moda|deco|estetica|fotografia|diseno|coaching|terapia|nutricion|comunicacion|digital|online|studios|ar)$/;
+  for(const t of (p.dn||"").split(/\s+/)){
+    const c=t.replace(/[^\p{L}]/gu,"");
+    const k=norm(c);
+    if(c.length>=3&&!skip.test(k)&&u.includes(k))return cap(c);
+  }
+  const h=p.u.replace("@","").split(/[._\d]/)[0];
+  return /^[a-z]{3,8}$/i.test(h)&&!skip.test(norm(h))?cap(h):"";
+}
+function isPlural(p){return p.pl==="p"||(p.pl!=="s"&&p.e==="equipo")}
+function msgs(p){
+  const n=firstName(p),pl=isPlural(p),sp=n?" "+n:"";
+  if(p.e==="pro")return {
+    o:`Hola${sp}, vi tu laburo y está muy bueno. te consulto algo, cuando se te junta producción tercerizás parte de la edición o lo hacés todo vos?`,
+    f:`che${sp}, si en algún momento querés descargar edición en alguien de confianza te mando ejemplos de mi laburo, sin compromiso`};
+  const o=pl
+    ?`Hola chicoss, me viene saliendo su cuenta y me parece brutal el contenido que suben. Viendo sus Reels, me dio curiosidad: ¿se los editan ustedes mismos o tienen a alguien que les ayuda con eso?`
+    :`Hola${sp}, me viene saliendo tu cuenta y me parece brutal el contenido que subís. Viendo tus Reels, me dio curiosidad: ¿te los editás vos mismo o tenés a alguien que te ayuda con eso?`;
+  const f=pl
+    ?(p.l==1?`che, una idea: de sus videos largos se pueden sacar 8-10 clips para reels sin grabar nada nuevo. si les copa les armo uno de prueba sin costo`
+            :`che, si quieren subir más seguido sin que les lleve tiempo, yo edito reels para creadores. les mando ejemplos si quieren`)
+    :(p.l==1?`che${sp}, una idea: de tus videos largos se pueden sacar 8-10 clips para reels sin grabar nada nuevo. si te copa te armo uno de prueba sin costo`
+            :`che${sp}, si querés subir más seguido sin que te lleve tiempo, yo edito reels para creadores. te mando ejemplos si querés`);
+  return {o,f};
+}
+function replies(p){
+  return ["solo","editor","equipo","precio","ejemplos","quien","interesado","pensar","presu","no","frec"]
+    .map(k=>({k,l:DM_LABELS[k],t:dmFor(p,k,0)}));
+}
+
+/* ===== Detección de intención + respuesta a medida (singular / plural) ===== */
+(function(g){
+const LINK="https://iariaciro.github.io/portafolio/";
+const nt=x=>(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+const cap=s=>s.charAt(0).toUpperCase()+s.slice(1);
+const PLRX=/\b(somos|nosotros|nosotras|tenemos|editamos|hacemos|armamos|nuestr[oa]s?|estamos|subimos|publicamos)\b/;
+const RX=[
+ ["stop",/(deja(me)? de (escribir|molestar|mandar)|no (me )?(escribas|molestes|mandes)|spam|denunci|bloqueo|bloquear|no insistas|basta de)/],
+ ["presu",/(no tengo (plata|presupuesto|para pagar)|no tenemos (plata|presupuesto)|sin presupuesto|no (me )?da el presupuesto|esta caro|muy caro|no puedo pagar|no cuento con presupuesto|no hay presupuesto)/],
+ ["precio",/(cuanto (cobr|sale|cuesta|vale|es\b)|precio|tarifa|cuanto me (sale|cobr)|costo|que (precio|costo))/],
+ ["ejemplos",/(ejemplo|portfolio|portafolio|muestra|mostra|laburos|trabajos (tuyos|anteriores)|referencias|ver (algo|tu)|mandame (algo|alguno)|pasame (algo|alguno)|mandanos|pasanos)/],
+ ["quien",/(quien (sos|eres|es)|que (hacen|haces|ofreces|ofrecen|vendes|venden)|como (funciona|trabajas|trabajan|es el tema)|de que (se trata|va)|en que consiste|te conozco|de donde (sos|me)|que onda)/],
+ ["editor",/(ya tengo (un |una )?(editor|editora|alguien|quien)|ya tenemos (un |una )?(editor|editora|alguien|quien)|tengo (un |una )?(editor|editora)|tenemos (un |una )?(editor|editora)|tengo (a )?alguien|tenemos (a )?alguien|me (lo |los )?(edita|editan|ayuda|ayudan)|nos (lo |los )?(edita|editan|ayuda|ayudan)|tengo ayuda|tenemos ayuda|mi (editor|editora|equipo|socio|socia|hermano|hermana|novio|novia|marido|primo|prima)|trabajo con (un|una)|trabajamos con (un|una)|lo (hace|hacen) (un|una|mi|el))/],
+ ["equipo",/((tenemos|tengo) (un )?(equipo|community|agencia)|nuestro equipo|el equipo (lo )?(hace|edita|se encarga)|lo (hace|hacemos) (el equipo|internamente))/],
+ ["solo",/((lo|los|las) (edito|hago|armo) (yo|solo|sola|mismo|misma)|edito (yo|todo)|yo (mismo|misma|solo|sola)|yo los (hago|edito)|los edito yo|me (los|lo) edito|los hago yo|lo hago yo|editamos|los hacemos|lo hacemos nosotr|nosotros (los|lo)|nosotros mismos|entre nosotros|^\s*(si,? ?)?(yo|yo solo|yo sola|yo mismo|yo misma)[.! ]*$)/],
+ ["frec",/((\d+|un|uno|una|dos|tres|cuatro|cinco|seis|siete)\s*(reels?|videos?|posteos?|publicaciones?)?\s*(por|x|a la|cada)\s*(semana|dia|mes)|todos los dias|diario|subimos|publicamos)/],
+ ["interesado",/(me interesa|nos interesa|me gustaria|nos gustaria|me copa|nos copa|quiero (ver|probar)|queremos (ver|probar)|probemos|mandame|mandalo|mandanos|contame|cuentame|dale\b|si,? (claro|dale|por favor)|obvio|por que no|pasalo|pasamelo)/],
+ ["pensar",/(lo (voy a )?(pienso|pensar|veo|charlo|consulto)|lo (vamos a )?(pensamos|vemos|charlamos)|despues|mas adelante|la semana (que viene|proxima)|el mes que viene|ahora no|en otro momento|te aviso|te escribo yo|estoy ocupad|estamos ocupad)/],
+ ["no",/(\bno\b.{0,15}(gracias|interesa|necesito|necesitamos|busco|buscamos|por ahora|por el momento|hace falta|quiero|queremos)|no,? gracias|gracias,? no|\bpaso\b|estoy bien asi|estamos bien asi)/]
+];
+g.DM_LABELS={stop:"Pide que pares",no:"No le interesa",presu:"Sin presupuesto",precio:"Pregunta el precio",ejemplos:"Pide ejemplos / portafolio",quien:"Pregunta quién sos / cómo funciona",editor:"Ya tiene editor",equipo:"Tiene equipo",solo:"Edita solo (ellos mismos)",frec:"Cuenta su frecuencia",interesado:"Acepta ver el portafolio",pensar:"Lo va a pensar",otro:"No lo pude clasificar"};
+g.dmDetect=function(text){
+  const t=nt(text),m=RX.filter(([k,r])=>r.test(t)).map(x=>x[0]),has=k=>m.includes(k);
+  if(has("stop"))return["stop"];
+  const soft=["editor","equipo","solo","pensar","presu"].some(has);
+  if(has("no")&&!soft)return["no"];
+  let r=m.filter(k=>k!=="no");
+  if(["precio","ejemplos","quien"].some(has)||soft)r=r.filter(k=>k!=="interesado");
+  if(has("ejemplos"))r=r.filter(k=>k!=="interesado");
+  r=r.slice(0,2);
+  return r.length?r:["otro"];
+};
+g.dmPlural=(p,text)=>p.pl==="p"?true:p.pl==="s"?false:(PLRX.test(nt(text))||p.e==="equipo");
+function freq(t){
+  const W={un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7};
+  if(/todos los dias|diario/.test(t))return 7;
+  const m=t.match(/(\d+|un|uno|una|dos|tres|cuatro|cinco|seis|siete)\s*(?:reels?|videos?|posteos?|publicaciones?)?\s*(?:por|x|a la|cada)\s*(semana|dia|mes)/);
+  if(!m)return 0;
+  const n=isNaN(m[1])?W[m[1]]:+m[1];
+  return m[2]==="dia"?n*7:m[2]==="mes"?n/4:n;
+}
+const B={
+ /* ---- Tus guiones ---- */
+ solo:c=>({o:"",v:c.pl?[
+  `Clarooo, se los preguntaba porque imagino que, entre el trabajo diario y crear el contenido, sentarse a recortar videos y poner subtítulos les debe consumir horas que podrían aprovechar en otra cosa (o simplemente para descansar).\nJustamente yo me dedico a quitarle ese peso de encima a creadores como ustedes, para que puedan delegar la parte técnica y ahorrarse ese tiempo. Tengo un portafolio muy corto donde muestro el estilo dinámico que manejo.\n¿Les parece bien si les comparto el link para que le echen un ojo rápido cuando tengan dos minutos?`,
+  `Claro. Se los preguntaba porque sé que editar roba muchísimas horas que podrían usar en su negocio o descansando. Justamente ayudo a creadores como ustedes a delegar esa parte técnica. ¿Les molesta si les paso un link súper rápido con mi trabajo para que vean mi estilo?`
+ ]:[
+  `Te lo preguntaba porque imagino que, entre tu trabajo diario y crear el contenido, sentarte a recortar videos y poner subtítulos te debe consumir horas que podrías aprovechar en otra cosa (o simplemente para descansar).\nJustamente yo me dedico a quitarle ese peso de encima a creadores como vos, para que puedan delegar la parte técnica y ahorrarse ese tiempo. Tengo un portafolio muy corto donde muestro el estilo dinámico que manejo.\n¿Te parece bien si te comparto el link para que le eches un ojo rápido cuando tengas dos minutos?`,
+  `Claro. Te lo preguntaba porque sé que editar roba muchísimas horas que podrías usar en tu negocio o descansando. Justamente ayudo a creadores como vos a delegar esa parte técnica. ¿Te molesta si te paso un link súper rápido con mi trabajo para que veas mi estilo?`
+ ]}),
+ interesado:c=>({o:"",v:[c.pl
+  ?`Dale Genial! Acá les comparto el link. Para que no pierdan tiempo buscando, les dejé mis mejores trabajos en la primera carpeta que dice '00 | Reel Principal'.\nAbajo van a ver otras carpetas de clientes con los que trabajo por si quieren pispear otros estilos. Miren el primero tranquilo y me dicen qué les parece ese nivel de edición para su cuenta.\n${LINK}`
+  :`Dale Genial! Acá te comparto el link. Para que no pierdas tiempo buscando, te dejé mis mejores trabajos en la primera carpeta que dice '00 | Reel Principal'.\nAbajo vas a ver otras carpetas de clientes con los que trabajo por si querés pispear otros estilos. Mirate el primero tranquilo y decime qué te parece ese nivel de edición para tu cuenta.\n${LINK}`]}),
+ editor:c=>({o:"",v:[c.pl
+  ?`Qué bueno! Me alegra que ya estén delegando esa parte porque es clave. Les dejo mi portafolio por acá de todas formas:\n${LINK}\nGuárdenlo por si algún día su editor se va de vacaciones, está a full de laburo o necesitan sacar mucho contenido de golpe. Gracias chicos!`
+  :`Qué bueno${c.n?", "+c.n:""}! Me alegra que ya estés delegando esa parte porque es clave. Te dejo mi portafolio por acá de todas formas:\n${LINK}\nGuardalo por si algún día tu editor se va de vacaciones, está a full de laburo o necesitás sacar mucho contenido de golpe. ¡Que sigan los éxitos con la cuenta!`]}),
+ /* ---- Resto de casos (misma voz, singular/plural) ---- */
+ stop:c=>({o:"",v:[c.pl?`perdón la molestia chicos, no les escribo más. éxitos con todo`:`perdón la molestia${c.sp}, no te escribo más. éxitos con todo`,c.pl?`disculpen la molestia. no les escribo más, éxitos!`:`disculpá la molestia${c.sp}. no te escribo más, éxitos!`]}),
+ no:c=>({o:"Todo bien",v:c.pl?[`gracias por contestar! cualquier cosa más adelante me escriben. éxitos con el contenido`,`sin problema, gracias por responder! si algún día necesitan una mano con la edición acá estoy`]:[`gracias por contestar! cualquier cosa más adelante me escribís. éxitos con el contenido`,`sin problema, gracias por responder! si algún día necesitás una mano con la edición acá estoy`]}),
+ presu:c=>({o:"Entiendo",v:c.pl?[`sin drama. el de prueba se los hago gratis para que vean el resultado, y si más adelante tiene sentido lo charlamos. les sirve así?`,`todo bien. igual el reel de prueba va sin costo, así lo ven sin compromiso. si más adelante se da, charlamos`]:[`sin drama. el de prueba te lo hago gratis para que veas el resultado, y si más adelante tiene sentido lo charlamos. te sirve así?`,`todo bien. igual el reel de prueba va sin costo, así lo ves sin compromiso. si más adelante se da, charlamos`]}),
+ precio:c=>({o:"",v:c.pl?[`depende de cuántos reels por mes y de la duración, no quiero tirarles un número al aire. cuántos piensan subir por semana más o menos? con eso les paso una propuesta clara. el primero de prueba va sin costo`,`lo armo según el volumen y la duración de los videos. cuéntenme cuántos reels quieren por semana y les paso una propuesta clara. arrancamos con uno de prueba sin costo`]:[`depende de cuántos reels por mes y de la duración, no quiero tirarte un número al aire. cuántos pensás subir por semana más o menos? con eso te paso una propuesta clara. el primero de prueba va sin costo`,`lo armo según el volumen y la duración de los videos. contame cuántos reels querés por semana y te paso una propuesta clara. arrancamos con uno de prueba sin costo`]}),
+ ejemplos:c=>({o:"",v:[c.pl
+  ?`Dale! Acá les comparto el link con mis mejores trabajos, miren el primero tranquilos y me dicen qué les parece:\n${LINK}`
+  :`Dale! Acá te comparto el link con mis mejores trabajos, mirate el primero tranquilo y decime qué te parece:\n${LINK}`]}),
+ quien:c=>({o:"",v:c.pl?[`soy editor de video, laburo con creadores y marcas armando reels y clips a partir de videos largos. funciona simple: me pasan el material, les devuelvo el video editado y si hay cambios los ajustamos. [AGREGAR TU PLAZO HABITUAL]\nLes dejo mi portafolio:\n${LINK}`,`edito reels y clips para creadores. me mandan el material, yo lo edito y lo ajustamos hasta que quede como quieren. [AGREGAR TU PLAZO HABITUAL]`]:[`soy editor de video, laburo con creadores y marcas armando reels y clips a partir de videos largos. funciona simple: me pasás el material, te devuelvo el video editado y si hay cambios los ajustamos. [AGREGAR TU PLAZO HABITUAL]\nTe dejo mi portafolio:\n${LINK}`,`edito reels y clips para creadores. me mandás el material, yo lo edito y lo ajustamos hasta que quede como querés. [AGREGAR TU PLAZO HABITUAL]`]}),
+ equipo:c=>B.editor(c),
+ frec:c=>{const r=Math.round(c.fr),a=c.fr>=3?(c.pl?`${r} por semana es un buen ritmo, pero imagino que la edición les come mucho tiempo`:`${r} por semana es un buen ritmo, pero imagino que la edición te come mucho tiempo`):`buen ritmo`;
+   return {o:"Genial",v:c.pl?[`${a}. justamente yo me encargo de esa parte para que puedan subir más sin que les lleve tiempo. les dejo mi portafolio:\n${LINK}`,`${a}. si les copa les armo uno de prueba sin costo`]:[`${a}. justamente yo me encargo de esa parte para que puedas subir más sin que te lleve tiempo. te dejo mi portafolio:\n${LINK}`,`${a}. si te copa te armo uno de prueba sin costo`]}},
+ pensar:c=>({o:"Obvio",v:c.pl?[`tómense su tiempo, cuando quieran retomamos. les dejo mi portafolio para que lo vean tranquilos:\n${LINK}`,`sin apuro. cuando lo vean me escriben y lo charlamos`]:[`tomate tu tiempo, cuando quieras retomamos. te dejo mi portafolio para que lo veas tranquilo:\n${LINK}`,`sin apuro. cuando lo veas me escribís y lo charlamos`]}),
+ otro:c=>({o:"Gracias por contestar",v:c.pl?[`te cuento rápido: edito reels para creadores y marcas. si les interesa les muestro mi portafolio, les sirve?`,`me presento mejor: edito reels y clips para creadores. les dejo mi portafolio para que lo vean:\n${LINK}`]:[`te cuento rápido: edito reels para creadores y marcas. si te interesa te muestro mi portafolio, te sirve?`,`me presento mejor: edito reels y clips para creadores. te dejo mi portafolio para que lo veas:\n${LINK}`]})
+};
+/* ---- Capa de contexto: adapta tu guion a lo que dijo la persona y a los datos del prospecto ---- */
+function sig(raw,t){
+  return {
+    laugh:/(jaj|jej|😂|🤣|😅)/i.test(raw),
+    warm:/(!|😊|😍|🙌|🔥|❤|gracias|genial|buenisim|copado|re bueno)/i.test(raw),
+    busy:/(no tengo tiempo|no tenemos tiempo|sin tiempo|poco tiempo|falta de tiempo|me falta tiempo|mucho tiempo|me lleva|me consume|me come|me cuesta|horas|odio editar|complicad|pesad|no llego|no llegamos|no doy abasto|no damos abasto)/.test(t),
+    dry:raw.trim().length>0&&raw.trim().length<=22&&!/\?/.test(raw)
+  };
+}
+const lf=s=>s.charAt(0).toLowerCase()+s.slice(1);
+function adapt(k,b,idx,c){
+  if(k==="solo"){
+    if(c.busy&&idx===0){const ps=b.split("\n");if(ps.length>=3)b=(c.pl?"Los entiendo":"Te entiendo")+", editar se lleva un montón de tiempo. "+ps.slice(1).join("\n")}
+    if(c.lg&&idx===0)b=b.replace("que manejo.","que manejo. "+(c.pl?"Y como graban videos largos, de uno solo se pueden sacar varios reels sin grabar nada nuevo.":"Y como grabás videos largos, de uno solo se pueden sacar varios reels sin grabar nada nuevo."));
+  }
+  if(k==="interesado"&&c.lg)b=b.replace("\n"+LINK,"\n"+(c.pl?"Y si tienen videos largos, de uno solo se pueden sacar varios clips.":"Y si tenés videos largos, de uno solo se pueden sacar varios clips.")+"\n"+LINK);
+  if(c.niche){
+    b=b.replace("creadores como vos","creadores de "+c.niche+" como vos").replace("creadores como ustedes","creadores de "+c.niche+" como ustedes")
+       .replace("para tu cuenta.","para tu cuenta de "+c.niche+".").replace("para su cuenta.","para su cuenta de "+c.niche+".");
+  }
+  if(c.laugh&&["solo","frec","quien","precio","otro"].includes(k))b="Jaja, "+lf(b);
+  else if(c.warm&&k==="solo")b="Genial! "+b;
+  return b;
+}
+const VG=[
+ ["Dale Genial!","Genial!","Buenísimo!","Perfecto!"],
+ ["Acá te comparto el link.","Te paso el link.","Acá va el link."],
+ ["Acá les comparto el link.","Les paso el link.","Acá va el link."],
+ ["Mirate el primero tranquilo y decime","Mirate el primero con calma y decime","Fijate en el primero con calma y decime"],
+ ["Miren el primero tranquilo y me dicen","Miren el primero con calma y me dicen","Fíjense en el primero con calma y me dicen"],
+ ["Tengo un portafolio muy corto","Tengo un portafolio cortito"],
+ ["cuando tengas dos minutos","cuando tengas un ratito"],
+ ["cuando tengan dos minutos","cuando tengan un ratito"],
+ ["Justamente yo me dedico a quitarle ese peso de encima","Yo me dedico justamente a quitarle ese peso de encima"],
+ ["Me alegra que ya estés delegando esa parte porque es clave.","Está muy bien que ya estés delegando esa parte, es clave."],
+ ["Me alegra que ya estén delegando esa parte porque es clave.","Está muy bien que ya estén delegando esa parte, es clave."],
+ ["Guardalo por si algún día","Guardalo por si en algún momento"],
+ ["Guárdenlo por si algún día","Guárdenlo por si en algún momento"]
+];
+function vary(b,seed){
+  VG.forEach((grp,gi)=>{
+    const cur=grp.find(x=>b.includes(x));if(!cur)return;
+    const h=Math.abs(seed*7+gi*5)%(grp.length*2),alt=h<grp.length?grp[h]:grp[0];
+    b=b.replace(cur,alt);
+  });
+  return b;
+}
+function build(p,ks,text,v){
+  const raw=text||"",t=nt(raw),pl=g.dmPlural(p,raw),n=pl?"":firstName(p);
+  const hs=[...p.u].reduce((a,ch)=>a+ch.charCodeAt(0),0);
+  const c=Object.assign({pl,n,sp:n?" "+n:"",fr:freq(t),niche:(p.n||"").trim().toLowerCase(),lg:p.l==1,seed:hs+v*13+ks.length},sig(raw,t));
+  const parts=ks.map(k=>Object.assign({k},B[k](c)));
+  let seen=false;const bodies=[];
+  parts.forEach(x=>{
+    let idx=v%x.v.length;
+    if(x.k==="solo"&&c.dry)idx=(v+1)%x.v.length;
+    const b=adapt(x.k,vary(x.v[idx],c.seed),idx,c);
+    if(b.includes(LINK)){if(seen)return;seen=true}
+    bodies.push(b);
+  });
+  const head=parts[0].o?parts[0].o+c.sp+", ":"";
+  return cap(head+bodies.join("\n"));
+}
+g.dmCompose=(p,text,v)=>build(p,g.dmDetect(text),text,v||0);
+g.dmFor=(p,k,v)=>build(p,[k],"",v||0);
+g.dmContext=function(p,text){
+  const s=sig(text||"",nt(text||"")),o=[];
+  if(s.laugh)o.push("se rió → tono cercano");
+  if(s.warm&&!s.laugh)o.push("tono entusiasta");
+  if(s.busy)o.push("habla de falta de tiempo");
+  if(s.dry&&g.dmDetect(text||"").includes("solo"))o.push("respuesta corta → versión corta");
+  if(p.n)o.push("nicho: "+p.n);
+  if(p.l==1)o.push("sube videos largos");
+  return o;
+};
+})(globalThis);
+</script>
+<script>/* Sincronización Radar: extensión <-> iPhone, usando un repo PRIVADO de GitHub (archivo radar-data.json). */
+(function(g){
+const DAY=864e5,WEEK=7*DAY,FILE="radar-data.json";
+const stable=o=>{
+  if(Array.isArray(o))return"["+o.map(stable).join(",")+"]";
+  if(o&&typeof o==="object")return"{"+Object.keys(o).sort().filter(k=>o[k]!==undefined).map(k=>JSON.stringify(k)+":"+stable(o[k])).join(",")+"}";
+  const j=JSON.stringify(o);return j===undefined?"null":j;
+};
+const norm=s=>({
+  prospects:(s.prospects||[]).filter(p=>p&&typeof p.u==="string"),
+  log:[...new Set((s.log||[]).filter(t=>Date.now()-t<WEEK))].sort((a,b)=>a-b),
+  limit:s.limit==null?undefined:+s.limit,
+  hlimit:s.hlimit==null?undefined:+s.hlimit,
+  setAt:+s.setAt||0
+});
+const pmap=a=>{const m={};a.forEach(p=>m[p.u]=p);return m};
+const sig=s=>stable({p:pmap(s.prospects),l:s.log,limit:s.limit,hlimit:s.hlimit,setAt:s.setAt});
+const RANK={todo:0,cont:1,resp:2,int:3,cerr:4,desc:4};
+function newer(a,b){
+  const ka=[a.sent||0,a.fud||0,RANK[a.st]||0],kb=[b.sent||0,b.fud||0,RANK[b.st]||0];
+  for(let i=0;i<3;i++){if(ka[i]!==kb[i])return ka[i]>kb[i]?a:b}
+  return a;
+}
+// Fusión de 3 vías: local, remoto y la última foto sincronizada (base)
+function merge(L,R,B){
+  if(!R)return L;
+  const lm=pmap(L.prospects),rm=pmap(R.prospects),bm=B&&B.map?B.map:null;
+  const keys=[...new Set([...Object.keys(lm),...Object.keys(rm)])],out=[];
+  for(const u of keys){
+    const l=lm[u],r=rm[u],lj=l?stable(l):null,rj=r?stable(r):null,bj=bm&&bm[u]!==undefined?bm[u]:null;
+    let pick;
+    if(lj===rj)pick=l;
+    else if(bm){
+      const lc=lj!==bj,rc=rj!==bj;
+      pick=!lc?r:!rc?l:((l&&r)?newer(l,r):(l||r));
+    }else pick=(l&&r)?newer(l,r):(l||r);
+    if(pick)out.push(pick);
+  }
+  const bl=new Set(B&&B.log||[]),ls=new Set(L.log),rs=new Set(R.log),removed=new Set();
+  bl.forEach(t=>{if(!ls.has(t)||!rs.has(t))removed.add(t)});
+  const log=[...new Set([...L.log,...R.log])].filter(t=>!removed.has(t)).sort((a,b)=>a-b);
+  const lw=L.setAt||0,rw=R.setAt||0,win=rw>lw?R:L,oth=win===R?L:R;
+  return {prospects:out,log,limit:win.limit!=null?win.limit:oth.limit,hlimit:win.hlimit!=null?win.hlimit:oth.hlimit,setAt:Math.max(lw,rw)};
+}
+const toBase=M=>({map:Object.fromEntries(M.prospects.map(p=>[p.u,stable(p)])),log:[...M.log]});
+const enc=s=>{const b=new TextEncoder().encode(s);let bin="";for(let i=0;i<b.length;i+=8192)bin+=String.fromCharCode.apply(null,b.subarray(i,i+8192));return btoa(bin)};
+const dec=s=>{const bin=atob(s.replace(/\s/g,""));return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)))};
+const H=c=>({"Authorization":"Bearer "+c.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"});
+const U=c=>"https://api.github.com/repos/"+c.repo+"/contents/"+FILE;
+async function getRemote(c){
+  const r=await fetch(U(c)+"?t="+Date.now(),{headers:H(c),cache:"no-store"});
+  if(r.status===404){
+    const rr=await fetch("https://api.github.com/repos/"+c.repo,{headers:H(c),cache:"no-store"});
+    if(rr.status===404||rr.status===401||rr.status===403)throw new Error("No encuentro el repo o el token no tiene acceso");
+    return {state:null,sha:null};
+  }
+  if(r.status===401||r.status===403)throw new Error("Token inválido o sin permisos ("+r.status+")");
+  if(!r.ok)throw new Error("GitHub respondió "+r.status);
+  const j=await r.json();
+  if(!j.content)throw new Error("El archivo remoto es demasiado grande");
+  return {state:JSON.parse(dec(j.content)),sha:j.sha};
+}
+async function putRemote(c,M,sha){
+  const data={v:1,updated:Date.now(),prospects:M.prospects,log:M.log,limit:M.limit,hlimit:M.hlimit,setAt:M.setAt};
+  const body={message:"sync "+new Date().toISOString(),content:enc(JSON.stringify(data))};
+  if(sha)body.sha=sha;
+  const r=await fetch(U(c),{method:"PUT",headers:Object.assign({"Content-Type":"application/json"},H(c)),body:JSON.stringify(body)});
+  if(r.status===409||r.status===422)return"conflict";
+  if(!r.ok)throw new Error("No pude guardar en GitHub ("+r.status+")");
+  return"ok";
+}
+async function run(A){
+  try{
+    const cfg=await A.getCfg();
+    if(!cfg||!cfg.token||!cfg.repo)return {ok:false,msg:"Sin configurar"};
+    for(let i=0;i<3;i++){
+      const L=norm(await A.read()),ls=sig(L);
+      const rem=await getRemote(cfg),R=rem.state?norm(rem.state):null;
+      const B=R?await A.getBase():null;
+      const M=merge(L,R,B);
+      const lostL=L.prospects.length-M.prospects.length,lostR=R?R.prospects.length-M.prospects.length:0;
+      if((lostL>=5&&lostL>L.prospects.length*.5)||(lostR>=5&&lostR>R.prospects.length*.5))
+        throw new Error("Frené la sincronización: borraría muchos prospectos. Tocá Configurar de nuevo para reiniciarla sin borrar nada.");
+      if(sig(norm(await A.read()))!==ls)continue;
+      const pulled=sig(M)!==ls,pushed=!R||sig(M)!==sig(R);
+      if(pulled)await A.write(M);
+      if(pushed&&(await putRemote(cfg,M,rem.sha))==="conflict")continue;
+      await A.setBase(toBase(M));
+      return {ok:true,pulled,pushed,msg:pulled&&pushed?"Sincronizado (cambios en ambos lados)":pulled?"Recibí cambios":pushed?"Envié cambios":"Todo al día"};
+    }
+    return {ok:false,retry:true,msg:"Hubo cambios durante la sincronización, reintento…"};
+  }catch(e){return {ok:false,msg:String(e&&e.message||e)}}
+}
+function chromeAdapter(){
+  const get=k=>new Promise(r=>chrome.storage.local.get(k,r)),set=o=>new Promise(r=>chrome.storage.local.set(o,r));
+  return {
+    read:async()=>{const x=await get(["prospects","log","limit","hlimit","setAt"]);return {prospects:x.prospects||[],log:x.log||[],limit:x.limit,hlimit:x.hlimit,setAt:x.setAt||0}},
+    write:async m=>{const o={prospects:m.prospects,log:m.log,setAt:m.setAt};if(m.limit!=null)o.limit=m.limit;if(m.hlimit!=null)o.hlimit=m.hlimit;await set(o)},
+    getCfg:async()=>(await get("syncCfg")).syncCfg||null,
+    getBase:async()=>(await get("syncBase")).syncBase||null,
+    setBase:async b=>set({syncBase:b})
+  };
+}
+g.RadarSync={run,merge,norm,sig,toBase,chromeAdapter,stable};
+})(globalThis);
+</script>
+<script>
+const KEY="radar_v1",DAY=864e5,HOUR=36e5,WEEK=7*DAY;
+let ST={prospects:[],log:[],limit:25,hlimit:6},view="cola",editU=null,filt="todo",RS={u:"",v:0};
+const DUMMY={u:"@",e:"nose",q:3,fr:"sem",l:0,m:0,f:0,g:"med"};
+const STG=[["todo","Por contactar"],["cont","Contactado"],["resp","Respondió"],["int","Interesado"],["cerr","Cerrado ✅"],["desc","Descartado"]];
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+function load(){try{const r=JSON.parse(localStorage.getItem(KEY)||"{}");ST.prospects=r.prospects||[];ST.log=(r.log||[]).filter(t=>Date.now()-t<WEEK);ST.limit=r.limit||25;ST.hlimit=r.hlimit||6;ST.setAt=r.setAt||0}catch(e){}}
+function save(quiet){try{localStorage.setItem(KEY,JSON.stringify(ST))}catch(e){toast("No pude guardar. Hacé un backup ya")}if(!quiet)schedSync()}
+function toast(m){const t=$("#toast");t.textContent=m;t.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.opacity=0,1800)}
+const n24=()=>ST.log.filter(t=>Date.now()-t<DAY).length,n1=()=>ST.log.filter(t=>Date.now()-t<HOUR).length;
+const lvl=(n,L)=>n>=L?2:n>=Math.ceil(L*.8)?1:0;
+const find=u=>ST.prospects.find(p=>p.u===u);
+const queue=()=>ST.prospects.filter(p=>p.st==="todo").sort((a,b)=>(a.skip||0)-(b.skip||0)||score(b).s-score(a).s);
+const due=()=>ST.prospects.filter(p=>p.st==="cont"&&p.fu&&p.fu<=Date.now()&&!p.fud);
+function head(){
+  const d=n24(),h=n1(),ld=lvl(d,ST.limit),lh=lvl(h,ST.hlimit),w=Math.max(ld,lh),col=["#16a34a","#d97706","#dc2626"];
+  const msg=ld==2?"🛑 Límite diario alcanzado: frená por hoy.":lh==2?"🛑 Mucho en la última hora: esperá un rato.":ld==1?"⚠️ Cerca del límite diario.":"⚠️ Ritmo alto esta hora: bajá la velocidad.";
+  $("#hd").innerHTML=`<div class="top"><b>🎯 Radar</b><span>24 h <b>${d}/${ST.limit}</b> · 1 h <b>${h}/${ST.hlimit}</b></span></div><div class="bar"><i style="width:${Math.min(100,d/ST.limit*100)}%;background:${col[ld]}"></i></div>`+(w?`<div class="warn" style="color:${col[w]}">${msg}</div>`:"");
+}
+function limitsOK(){
+  const d=n24(),h=n1();
+  if(d>=ST.limit&&!confirm("Ya llegaste al límite diario ("+ST.limit+"). ¿Seguir igual?"))return false;
+  if(h>=ST.hlimit&&!confirm("Ya van "+h+" mensajes en la última hora (sugerido máx. "+ST.hlimit+"). ¿Seguir igual?"))return false;
+  return true;
+}
+function copy(t){
+  try{const ta=document.createElement("textarea");ta.value=t;ta.setAttribute("readonly","");ta.style.cssText="position:fixed;top:0;left:0;opacity:0";document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,999999);document.execCommand("copy");ta.remove()}catch(e){}
+  try{navigator.clipboard&&navigator.clipboard.writeText(t)}catch(e){}
+}
+const chatURL=u=>"https://ig.me/m/"+u.slice(1);
+const opt=(arr,val)=>arr.map(([k,l])=>`<option value="${k}"${String(k)===String(val)?" selected":""}>${esc(l)}</option>`).join("");
+const PLO=[["","Trato: auto"],["s","Singular (vos)"],["p","Plural (ustedes)"]];
+function chips(w){return w.map(x=>`<span class="ch">${esc(x)}</span>`).join("")}
+
+/* ---------- Contactar ---------- */
+function vCola(){
+  const q=queue(),du=due(),p=q[0];let h="";
+  if(du.length)h+=`<div class="card"><b>🔔 ${du.length} seguimiento${du.length>1?"s":""} pendiente${du.length>1?"s":""}</b><div class="sm">Próximo: ${esc(du[0].u)}</div><button class="btn amb" data-a="fu">Copiar seguimiento y abrir chat</button></div>`;
+  if(!p)h+=`<div class="card"><b>No hay prospectos por contactar.</b><div class="sm">Agregá uno en ⚙️ Más, o restaurá el backup de tu extensión.</div></div>`;
+  else{
+    const s=score(p),c=s.s>=70?"hi":s.s>=45?"md":"lw";
+    h+=`<div class="card"><div class="r"><div class="sc ${c}">${s.s}</div><div class="b"><a href="https://www.instagram.com/${esc(p.u.slice(1))}/" target="_blank">${esc(p.u)}</a> <span class="sm">${esc(p.n||"")} · ${(+p.f||0).toLocaleString("es-AR")}</span><div>${chips(s.w)}</div></div></div>
+    <div class="row"><select data-c="pl" data-u="${esc(p.u)}">${opt(PLO,p.pl||"")}</select></div>
+    <label>Mensaje de apertura (editable) · ${q.length} en cola</label><textarea id="ms" rows="7">${esc(msgs(p).o)}</textarea>
+    <button class="btn grn" data-a="open" data-u="${esc(p.u)}">📋 Copiar y abrir chat</button>
+    <div class="row"><button class="btn" data-a="skip" data-u="${esc(p.u)}">Saltar</button><button class="btn red" data-a="disc" data-u="${esc(p.u)}">Descartar</button></div>
+    <div class="sm">Al tocar, se copia el mensaje y se abre el chat. Pegalo y enviá vos.</div></div>`;
+  }
+  $("#v").innerHTML=h;
+}
+
+/* ---------- Responder ---------- */
+function vResp(){
+  const ord={cont:0,resp:1,int:2,todo:3,cerr:4,desc:5};
+  const L=[...ST.prospects].sort((a,b)=>(ord[a.st]??9)-(ord[b.st]??9));
+  $("#v").innerHTML=`<div class="card"><label>Prospecto</label><div class="row"><select id="rp" style="flex:2"><option value="">(no está en mi lista)</option>${L.map(p=>`<option value="${esc(p.u)}"${p.u===RS.u?" selected":""}>${esc(p.u)}${p.n?" · "+esc(p.n):""}</option>`).join("")}</select><select id="rpl">${opt(PLO,"")}</select></div>
+  <label>Lo que te respondió</label><textarea id="rm" rows="4" placeholder="Copiá su mensaje en Instagram y pegalo acá"></textarea>
+  <button class="btn" data-a="paste">📥 Pegar del portapapeles</button>
+  <div id="rch" style="margin-top:6px"></div>
+  <label>Respuesta sugerida (editable)</label><textarea id="ro" rows="9"></textarea>
+  <div class="row"><button class="btn pri" data-a="rcc">Copiar y contar envío</button><button class="btn" data-a="rc0">Copiar</button></div>
+  <div class="row"><button class="btn" data-a="rnx">Otra variante</button><a class="btn" id="rop" target="_blank">Abrir chat ↗</a></div>
+  <div class="sm" id="rnote"></div></div>`;
+  refreshResp();
+}
+const curP=()=>find(RS.u)||DUMMY;
+function refreshResp(){
+  const txt=$("#rm").value.trim(),p=curP();
+  $("#rpl").value=p.pl||"";
+  const op=$("#rop");op.style.display=p.u==="@"?"none":"";if(p.u!=="@")op.href=chatURL(p.u);
+  if(!txt){$("#ro").value="";$("#rch").innerHTML="";$("#rnote").textContent="Pegá el mensaje que te mandó para que arme la respuesta.";return}
+  const ks=dmDetect(txt),o=$("#ro");
+  $("#rch").innerHTML=chips(["Trato: "+(dmPlural(p,txt)?"plural":"singular"),...ks.map(k=>DM_LABELS[k]),...dmContext(p,txt)]);
+  o.value=dmCompose(p,txt,RS.v);
+  $("#rnote").textContent=(ks.includes("no")||ks.includes("stop")?"Al copiar, este prospecto pasa a Descartado. ":"")+(ks.includes("otro")?"No pude clasificarlo: revisá y ajustá a mano. ":"")+(/\[[A-ZÁÉÍÓÚ ]+\]/.test(o.value)?"Completá lo que está entre [corchetes] antes de enviar.":"");
+}
+function doReplyCopy(count){
+  const t=$("#ro").value.trim();if(!t)return;
+  if(count&&!limitsOK())return;
+  copy(t);
+  if(count){ST.log.push(Date.now())}
+  const p=find(RS.u),m=$("#rm").value.trim();
+  if(p&&m){const ks=dmDetect(m);if(ks.includes("no")||ks.includes("stop"))p.st="desc";else if(ks.includes("interesado"))p.st="int";else if(p.st==="cont")p.st="resp"}
+  save();head();toast(count?"Copiado y contado ✓":"Copiado ✓");
+}
+
+/* ---------- Lista ---------- */
+function vList(){
+  const L=ST.prospects.filter(p=>p.st===filt).map(p=>({p,...score(p)})).sort((a,b)=>b.s-a.s);
+  $("#v").innerHTML=`<select data-c="flt">${STG.map(([k,l])=>`<option value="${k}"${k===filt?" selected":""}>${l} (${ST.prospects.filter(p=>p.st===k).length})</option>`).join("")}</select><div style="height:10px"></div>`+
+  (L.length?L.map(({p,s,w})=>{const c=s>=70?"hi":s>=45?"md":"lw",u=esc(p.u);
+    return `<div class="card"><div class="r"><div class="sc ${c}">${s}</div><div class="b"><a href="https://www.instagram.com/${esc(p.u.slice(1))}/" target="_blank">${u}</a> <span class="sm">${esc(p.n||"")} · ${(+p.f||0).toLocaleString("es-AR")}</span><div>${chips(w)}</div></div></div>
+    <div class="row"><select data-c="st" data-u="${u}">${opt(STG,p.st)}</select><select data-c="pl" data-u="${u}">${opt(PLO,p.pl||"")}</select></div>
+    <div class="row"><button class="btn" data-a="toresp" data-u="${u}">💬 Responder</button><button class="btn" data-a="edit" data-u="${u}">✏️ Editar</button><button class="btn red" data-a="rm" data-u="${u}">✕</button></div></div>`}).join(""):`<div class="sm">Nada en esta etapa.</div>`);
+}
+
+/* ---------- Más ---------- */
+function vMas(){
+  const p=editU?find(editU):null,d=p||{u:"",dn:"",n:"",f:"",e:"nose",q:3,fr:"sem",l:0,m:0,g:"med"};
+  $("#v").innerHTML=`<div class="card"><h2>☁️ Sincronización con la compu</h2>
+  <label>Repo privado de datos (usuario/nombre)</label><input id="s_repo" value="${esc((getCfg()||{}).repo||"")}" placeholder="iariaciro/radar-datos" autocapitalize="off" autocorrect="off">
+  <label>Token de GitHub ${getCfg()?"(guardado ✓, dejalo vacío para no cambiarlo)":""}</label><input id="s_tok" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off">
+  <button class="btn pri" data-a="sy_save">Guardar y sincronizar</button>
+  <div class="row"><button class="btn" data-a="sy_now">Sincronizar ahora</button><button class="btn red" data-a="sy_off">Desconectar</button></div>
+  <div class="sm" id="sst"></div></div>
+  <div class="card"><h2>${p?"Editar prospecto":"Agregar prospecto"}</h2>
+  <label>Usuario o link de Instagram</label><input id="f_u" value="${esc(d.u)}" placeholder="@usuario" autocapitalize="off" autocorrect="off">
+  <div class="row"><div><label>Nombre que muestra</label><input id="f_dn" value="${esc(d.dn)}"></div><div><label>Tema / nicho</label><input id="f_n" value="${esc(d.n)}" placeholder="ej: fitness"></div></div>
+  <div class="row"><div><label>Seguidores</label><input id="f_f" type="number" inputmode="numeric" value="${esc(d.f)}"></div><div><label>¿Quién edita?</label><select id="f_e">${opt([["solo","Edita solo"],["nose","No sé"],["equipo","Tiene equipo"],["pro","Es del rubro"]],d.e)}</select></div></div>
+  <div class="row"><div><label>Calidad de edición</label><select id="f_q">${opt([[1,"1 · muy mala"],[2,"2 · mejorable"],[3,"3 · normal"],[4,"4 · buena"],[5,"5 · pro"]],d.q)}</select></div><div><label>Frecuencia</label><select id="f_fr">${opt([["dia","Diaria"],["sem","Semanal"],["irr","Irregular"],["rara","Muy esporádica"]],d.fr)}</select></div></div>
+  <div class="row"><div><label>Video largo</label><select id="f_l">${opt([[0,"No"],[1,"Sí"]],d.l)}</select></div><div><label>Monetiza</label><select id="f_m">${opt([[0,"No"],[1,"Sí"]],d.m)}</select></div><div><label>Engagement</label><select id="f_g">${opt([["alto","Alto"],["med","Medio"],["bajo","Bajo"]],d.g)}</select></div></div>
+  <label>Trato</label><select id="f_pl">${opt(PLO,d.pl||"")}</select>
+  <button class="btn pri" data-a="saveform">${p?"Guardar cambios":"Agregar a la cola"}</button>${p?`<button class="btn" data-a="cancel">Cancelar</button>`:""}</div>
+  <div class="card"><h2>Límites</h2><div class="row"><div><label>Máx. por día (24 h)</label><input type="number" inputmode="numeric" data-c="lim" value="${ST.limit}"></div><div><label>Máx. por hora</label><input type="number" inputmode="numeric" data-c="hlim" value="${ST.hlimit}"></div></div>
+  <div class="row"><button class="btn" data-a="plus">+1 enviado</button><button class="btn" data-a="minus">−1</button></div>
+  <div class="sm">Los mensajes cuentan en una ventana móvil: dejan de sumar 24 h (o 1 h) después de enviados.</div></div>
+  <div class="card"><h2>Backup y sincronizar</h2><div class="sm">Compatible con "Copiar backup" / "Restaurar" de tu extensión de Chrome.</div>
+  <button class="btn" data-a="export">📤 Copiar backup</button>
+  <label>Pegá un backup para restaurar</label><textarea id="imp" rows="3"></textarea>
+  <div class="row"><button class="btn" data-a="merge">Combinar (suma los nuevos)</button><button class="btn red" data-a="replace">Reemplazar todo</button></div></div>`;
+  setSst();
+}
+const normU=s=>{s=String(s||"").trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i,"").replace(/[\/?#].*$/,"").replace(/^@/,"").toLowerCase();return /^[a-z0-9._]{1,30}$/.test(s)?"@"+s:""};
+function saveForm(){
+  const u=normU($("#f_u").value);if(!u)return alert("Usuario inválido");
+  const o={u,dn:$("#f_dn").value.trim(),n:$("#f_n").value.trim(),f:+$("#f_f").value||0,e:$("#f_e").value,q:+$("#f_q").value,fr:$("#f_fr").value,l:+$("#f_l").value,m:+$("#f_m").value,g:$("#f_g").value};
+  const pl=$("#f_pl").value;
+  if(editU){const p=find(editU);Object.assign(p,o);if(pl)p.pl=pl;else delete p.pl;editU=null;toast("Guardado ✓")}
+  else{if(find(u))return alert("Ese usuario ya está en tu lista");const p={...o,st:"todo"};if(pl)p.pl=pl;ST.prospects.push(p);toast("Agregado ✓")}
+  save();render();
+}
+function doImport(replace){
+  try{
+    const j=JSON.parse($("#imp").value.trim()),arr=Array.isArray(j)?j:j.prospects;
+    if(!Array.isArray(arr)||arr.some(p=>!p||typeof p.u!=="string"))throw 0;
+    if(replace){if(!confirm("Esto borra tu lista actual y la reemplaza. ¿Seguir?"))return;ST.prospects=arr}
+    else{let n=0;arr.forEach(p=>{if(!find(p.u)){ST.prospects.push(p);n++}});toast(n+" nuevos agregados")}
+    save();render();if(replace)toast("Restaurado ✓");
+  }catch(e){alert("Backup inválido")}
+}
+
+
+/* ---------- Sincronización (repo privado de GitHub) ---------- */
+const CFGK="radar_sync_cfg",BASEK="radar_sync_base";
+const getCfg=()=>{try{return JSON.parse(localStorage.getItem(CFGK)||"null")}catch(e){return null}};
+let syncTimer=null,syncing=false,SS={t:0,ok:true,msg:""};
+function schedSync(){if(!getCfg())return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>runSync(),6000)}
+const syncA={
+  read:async()=>({prospects:ST.prospects,log:ST.log,limit:ST.limit,hlimit:ST.hlimit,setAt:ST.setAt||0}),
+  write:async m=>{ST.prospects=m.prospects;ST.log=m.log;if(m.limit!=null)ST.limit=m.limit;if(m.hlimit!=null)ST.hlimit=m.hlimit;ST.setAt=m.setAt;save(true)},
+  getCfg:async()=>getCfg(),
+  getBase:async()=>{try{return JSON.parse(localStorage.getItem(BASEK)||"null")}catch(e){return null}},
+  setBase:async b=>{try{localStorage.setItem(BASEK,JSON.stringify(b))}catch(e){}}
+};
+function setSst(t){const e=$("#sst");if(!e)return;e.textContent=t||(getCfg()?(SS.t?(SS.ok?"✓ ":"⚠️ ")+SS.msg+" · "+new Date(SS.t).toLocaleTimeString("es-AR",{hour:"2-digit",minute:"2-digit"}):"Configurado"):"Sin configurar")}
+async function runSync(manual){
+  if(syncing||!getCfg())return;
+  syncing=true;setSst("Sincronizando…");
+  const r=await RadarSync.run(syncA);
+  SS={t:Date.now(),ok:r.ok,msg:r.msg};syncing=false;
+  head();setSst();
+  const ae=document.activeElement&&document.activeElement.tagName;
+  if(r.pulled&&(view==="cola"||view==="list")&&ae!=="TEXTAREA"&&ae!=="INPUT"&&ae!=="SELECT")render();
+  if(r.retry)setTimeout(()=>runSync(),4000);
+  if(manual)toast(r.ok?"Sincronizado ✓":"Error: "+r.msg);
+}
+
+/* ---------- Eventos ---------- */
+function openChat(u){window.open(chatURL(u),"_blank")}
+$("#v").addEventListener("click",async e=>{
+  const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,u=b.dataset.u,p=u&&find(u);
+  if(a==="open"&&p){if(!limitsOK())return;copy($("#ms").value);p.st="cont";p.sent=Date.now();p.fu=Date.now()+3*DAY;ST.log.push(Date.now());save();head();openChat(p.u);render()}
+  if(a==="fu"){const q=due()[0];if(!q||!limitsOK())return;copy(msgs(q).f);q.fud=Date.now();ST.log.push(Date.now());save();head();openChat(q.u);render()}
+  if(a==="skip"&&p){p.skip=Date.now();save();render()}
+  if(a==="disc"&&p){p.st="desc";save();render()}
+  if(a==="rm"&&p&&confirm("¿Borrar "+p.u+"?")){ST.prospects=ST.prospects.filter(x=>x!==p);save();render()}
+  if(a==="toresp"){RS={u,v:0};setView("resp")}
+  if(a==="edit"){editU=u;setView("mas")}
+  if(a==="cancel"){editU=null;render()}
+  if(a==="saveform")saveForm();
+  if(a==="plus"){ST.log.push(Date.now());save();head();toast("+1")}
+  if(a==="minus"){ST.log.sort((x,y)=>x-y);ST.log.pop();save();head();toast("−1")}
+  if(a==="sy_save"){
+    const repo=$("#s_repo").value.trim(),old=getCfg(),token=$("#s_tok").value.trim()||(old&&old.token)||"";
+    if(!/^[\w.-]+\/[\w.-]+$/.test(repo))return alert("Formato del repo: usuario/nombre");
+    if(!token)return alert("Falta el token");
+    try{localStorage.setItem(CFGK,JSON.stringify({repo,token}));localStorage.removeItem(BASEK)}catch(err){return alert("No pude guardar la configuración")}
+    $("#s_tok").value="";runSync(true);
+  }
+  if(a==="sy_now")runSync(true);
+  if(a==="sy_off"&&confirm("¿Desconectar la sincronización? Tus datos quedan en este teléfono.")){try{localStorage.removeItem(CFGK);localStorage.removeItem(BASEK)}catch(err){}render()}
+  if(a==="export"){copy(JSON.stringify(ST.prospects));toast("Backup copiado ✓")}
+  if(a==="merge")doImport(false);
+  if(a==="replace")doImport(true);
+  if(a==="paste"){try{$("#rm").value=await navigator.clipboard.readText();RS.v=0;refreshResp()}catch(err){toast("Pegalo a mano en el cuadro")}}
+  if(a==="rnx"){RS.v++;refreshResp()}
+  if(a==="rcc")doReplyCopy(true);
+  if(a==="rc0")doReplyCopy(false);
+});
+$("#v").addEventListener("input",e=>{if(e.target.id==="rm"){RS.v=0;refreshResp()}});
+$("#v").addEventListener("change",e=>{
+  const t=e.target,c=t.dataset.c,p=t.dataset.u&&find(t.dataset.u);
+  if(t.id==="rp"){RS.u=t.value;RS.v=0;refreshResp()}
+  if(t.id==="rpl"){const q=curP();if(t.value)q.pl=t.value;else delete q.pl;if(q!==DUMMY)save();refreshResp()}
+  if(c==="flt"){filt=t.value;render()}
+  if(c==="st"&&p){p.st=t.value;save();render()}
+  if(c==="pl"&&p){if(t.value)p.pl=t.value;else delete p.pl;save();render()}
+  if(c==="lim"){ST.limit=Math.max(1,+t.value||25);ST.setAt=Date.now();save();head()}
+  if(c==="hlim"){ST.hlimit=Math.max(1,+t.value||6);ST.setAt=Date.now();save();head()}
+});
+function render(){head();({cola:vCola,resp:vResp,list:vList,mas:vMas})[view]();document.querySelectorAll("#nv button").forEach(b=>b.classList.toggle("on",b.dataset.n===view))}
+function setView(v){view=v;if(v!=="mas")editU=null;render();scrollTo(0,0)}
+$("#nv").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setView(b.dataset.n)});
+load();render();setInterval(head,30000);
+if(getCfg())runSync();
+document.addEventListener("visibilitychange",()=>{if(!document.hidden&&getCfg())runSync()});
+setInterval(()=>{if(!document.hidden&&getCfg())runSync()},90000);
+</script></body></html>
