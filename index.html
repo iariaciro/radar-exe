@@ -30,6 +30,11 @@ textarea{resize:vertical}
 .sm{font-size:12px;color:var(--mut);margin-top:6px}a{color:var(--pri);font-weight:600;text-decoration:none}
 #toast{position:fixed;left:50%;bottom:calc(80px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#000c;color:#fff;padding:8px 16px;border-radius:99px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9}
 h2{font-size:16px;margin:4px 0 8px}
+.seg{display:flex;gap:6px;margin-bottom:8px}
+.seg button{flex:1;padding:7px 4px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--fg);font:inherit;font-size:13px}
+.seg button.on{background:var(--pri);color:#fff;border-color:var(--pri);font-weight:600}
+.bk{cursor:pointer;background:none;font:inherit;font-size:13px;padding:6px 11px;margin:4px 5px 0 0;color:var(--fg)}
+details>summary{cursor:pointer;padding:4px 0}
 </style></head><body>
 <div id="hd"></div><main id="v"></main>
 <nav id="nv"><button data-n="cola"><b>▶</b>Contactar</button><button data-n="resp"><b>💬</b>Responder</button><button data-n="list"><b>📋</b>Lista</button><button data-n="mas"><b>⚙️</b>Más</button></nav>
@@ -61,9 +66,35 @@ function firstName(p){
   const h=p.u.replace("@","").split(/[._\d]/)[0];
   return /^[a-z]{3,8}$/i.test(h)&&!skip.test(norm(h))?cap(h):"";
 }
-function isPlural(p){return p.pl==="p"||(p.pl!=="s"&&p.e==="equipo")}
+function guessPlural(o){
+  const nr=x=>(x||"").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"");
+  const name=nr(o.name),user=nr(String(o.user||"").replace("@","")),bio=nr(o.bio),cat=nr(o.cat);
+  let P=0,S=0;const wp=[],ws=[];
+  const hit=(re,s)=>{const m=s.match(re);return m?m[0].trim():null};
+  let m;
+  if(m=hit(/empresa|marca|tienda|agencia|restaurante|negocio|organizacion|productora|club|equipo|grupo|centro|clinica|consultora|academia|institucion|medio de comunicacion|comercio|inmobiliaria|gimnasio|estudio|sitio web/,cat)){P+=3;wp.push("categoría «"+m+"»")}
+  else if(m=hit(/persona|figura publica|creador|creadora|blog personal|escritor|escritora|coach|entrenador|entrenadora|periodista|influencer|modelo|fotografo|fotografa|disenador|disenadora|chef|doctor|doctora|psicolog|abogad|nutricionista|profesor|profesora|atleta|deportista|actor|actriz|cantante/,cat)){S+=2;ws.push("categoría «"+m+"»")}
+  if(m=hit(/\b(equipo|team|studio|estudio|agencia|agency|productora|colectivo|grupo|club|academia|clinica|centro|consultora|inmobiliaria|company|hermanos|familia|duo|trio|pareja|crew|laboratorio)\b/,name)){P+=3;wp.push("«"+m+"» en el nombre")}
+  else if(m=hit(/(team|equipo|studio|estudio|agencia|agency|productora|colectivo|grupo|club|academia|clinica|consultora|inmobiliaria|crew|hermanos|familia)/,user)){P+=2;wp.push("«"+m+"» en el usuario")}
+  if(/^[a-z]+ (y|e|&|\+) [a-z]+/.test(name)){P+=2;wp.push("dos nombres juntos")}
+  if(/^(los|las) /.test(name)){P+=2;wp.push("nombre en plural")}
+  if(/^(dr|dra|lic|prof|mg|ing|arq|cdor|cdora)\.? /.test(name)){S+=3;ws.push("título personal")}
+  if(m=hit(/\b(somos|nosotros|nosotras|nuestro|nuestra|nuestros|nuestras|ayudamos|trabajamos|hacemos|creamos|acompanamos|ofrecemos|brindamos|tenemos|juntos)\b/,bio)){P+=3;wp.push("«"+m+"» en la bio")}
+  if(m=hit(/\b(soy|yo|ayudo|hago|creo|acompano|ofrezco|me dedico|fundador|fundadora|mama|papa|madre|padre|esposa|esposo|casado|casada|mi trabajo|mis clases)\b/,bio)){S+=2;ws.push("«"+m+"» en la bio")}
+  const pl=(P>=3&&P>S)?"p":"s";
+  return {pl,P,S,why:pl==="p"?"Grupo ("+wp.join(", ")+")":"Persona"+(ws.length?" ("+ws.join(", ")+")":" (sin pistas de grupo)")};
+}
+// Trato plural: lo que elegiste manda; en Auto: equipo, o pistas de grupo en nombre/usuario
+function isPlural(p){return p.pl==="p"||(p.pl!=="s"&&(p.e==="equipo"||guessPlural({name:p.dn,user:p.u,cat:""}).pl==="p"))}
 function msgs(p){
   const n=firstName(p),pl=isPlural(p),sp=n?" "+n:"";
+  if(globalThis.RADAR_ACCT==="a"&&p.e!=="pro"){
+    const o=pl?`Hola Chicos! Edito reels para creadores (@ciroiar) y me gustó mucho su contenido. Les puedo pasar mi portafolio para que vean el estilo?`
+              :`Hola${sp}! Edito reels para creadores (@ciroiar) y me gustó mucho tu contenido. Te puedo pasar mi portafolio para que veas el estilo?`;
+    const f=pl?`Hola Chicos, retomo mi mensaje por si se perdió. Edito reels para creadores (@ciroiar)${p.l==1?" y de sus videos largos se pueden sacar varios clips":""}. Les paso mi portafolio para que vean el estilo?`
+              :`Hola${sp}, retomo mi mensaje por si se perdió. Edito reels para creadores (@ciroiar)${p.l==1?" y de tus videos largos se pueden sacar varios clips":""}. Te paso mi portafolio para que veas el estilo?`;
+    return {o,f};
+  }
   if(p.e==="pro")return {
     o:`Hola${sp}, vi tu laburo y está muy bueno. te consulto algo, cuando se te junta producción tercerizás parte de la edición o lo hacés todo vos?`,
     f:`che${sp}, si en algún momento querés descargar edición en alguien de confianza te mando ejemplos de mi laburo, sin compromiso`};
@@ -78,7 +109,7 @@ function msgs(p){
   return {o,f};
 }
 function replies(p){
-  return ["solo","editor","equipo","precio","ejemplos","quien","interesado","pensar","presu","no","frec"]
+  return ["solo","editor","equipo","precio","ejemplos","quien","interesado","pensar","presu","no","frec","stop"]
     .map(k=>({k,l:DM_LABELS[k],t:dmFor(p,k,0)}));
 }
 
@@ -100,7 +131,7 @@ const RX=[
  ["frec",/((\d+|un|uno|una|dos|tres|cuatro|cinco|seis|siete)\s*(reels?|videos?|posteos?|publicaciones?)?\s*(por|x|a la|cada)\s*(semana|dia|mes)|todos los dias|diario|subimos|publicamos)/],
  ["interesado",/(me interesa|nos interesa|me gustaria|nos gustaria|me copa|nos copa|quiero (ver|probar)|queremos (ver|probar)|probemos|mandame|mandalo|mandanos|contame|cuentame|dale\b|si,? (claro|dale|por favor)|obvio|por que no|pasalo|pasamelo)/],
  ["pensar",/(lo (voy a )?(pienso|pensar|veo|charlo|consulto)|lo (vamos a )?(pensamos|vemos|charlamos)|despues|mas adelante|la semana (que viene|proxima)|el mes que viene|ahora no|en otro momento|te aviso|te escribo yo|estoy ocupad|estamos ocupad)/],
- ["no",/(\bno\b.{0,15}(gracias|interesa|necesito|necesitamos|busco|buscamos|por ahora|por el momento|hace falta|quiero|queremos)|no,? gracias|gracias,? no|\bpaso\b|estoy bien asi|estamos bien asi)/]
+ ["no",/(\bno\s+(voy a|vamos a|pienso|pensamos)\s+(comprar|contratar|pagar)|\bno\s+(compro|contrato|compramos|contratamos)\b|\bno\s+(necesito|necesitamos|quiero|queremos|busco|buscamos)\s+(nada|comprar|contratar)|\bno\b.{0,15}(gracias|interesa|necesito|necesitamos|busco|buscamos|por ahora|por el momento|hace falta|quiero|queremos)|no,? gracias|gracias,? no|\bpaso\b|estoy bien asi|estamos bien asi)/]
 ];
 g.DM_LABELS={stop:"Pide que pares",no:"No le interesa",presu:"Sin presupuesto",precio:"Pregunta el precio",ejemplos:"Pide ejemplos / portafolio",quien:"Pregunta quién sos / cómo funciona",editor:"Ya tiene editor",equipo:"Tiene equipo",solo:"Edita solo (ellos mismos)",frec:"Cuenta su frecuencia",interesado:"Acepta ver el portafolio",pensar:"Lo va a pensar",otro:"No lo pude clasificar"};
 g.dmDetect=function(text){
@@ -114,7 +145,7 @@ g.dmDetect=function(text){
   r=r.slice(0,2);
   return r.length?r:["otro"];
 };
-g.dmPlural=(p,text)=>p.pl==="p"?true:p.pl==="s"?false:(PLRX.test(nt(text))||p.e==="equipo");
+g.dmPlural=(p,text)=>p.pl==="p"?true:p.pl==="s"?false:(PLRX.test(nt(text))||isPlural(p));
 function freq(t){
   const W={un:1,uno:1,una:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7};
   if(/todos los dias|diario/.test(t))return 7;
@@ -141,15 +172,15 @@ const B={
  /* ---- Resto de casos (misma voz, singular/plural) ---- */
  stop:c=>({o:"",v:[c.pl?`perdón la molestia chicos, no les escribo más. éxitos con todo`:`perdón la molestia${c.sp}, no te escribo más. éxitos con todo`,c.pl?`disculpen la molestia. no les escribo más, éxitos!`:`disculpá la molestia${c.sp}. no te escribo más, éxitos!`]}),
  no:c=>({o:"Todo bien",v:c.pl?[`gracias por contestar! cualquier cosa más adelante me escriben. éxitos con el contenido`,`sin problema, gracias por responder! si algún día necesitan una mano con la edición acá estoy`]:[`gracias por contestar! cualquier cosa más adelante me escribís. éxitos con el contenido`,`sin problema, gracias por responder! si algún día necesitás una mano con la edición acá estoy`]}),
- presu:c=>({o:"Entiendo",v:c.pl?[`sin drama. el de prueba se los hago gratis para que vean el resultado, y si más adelante tiene sentido lo charlamos. les sirve así?`,`todo bien. igual el reel de prueba va sin costo, así lo ven sin compromiso. si más adelante se da, charlamos`]:[`sin drama. el de prueba te lo hago gratis para que veas el resultado, y si más adelante tiene sentido lo charlamos. te sirve así?`,`todo bien. igual el reel de prueba va sin costo, así lo ves sin compromiso. si más adelante se da, charlamos`]}),
- precio:c=>({o:"",v:c.pl?[`depende de cuántos reels por mes y de la duración, no quiero tirarles un número al aire. cuántos piensan subir por semana más o menos? con eso les paso una propuesta clara. el primero de prueba va sin costo`,`lo armo según el volumen y la duración de los videos. cuéntenme cuántos reels quieren por semana y les paso una propuesta clara. arrancamos con uno de prueba sin costo`]:[`depende de cuántos reels por mes y de la duración, no quiero tirarte un número al aire. cuántos pensás subir por semana más o menos? con eso te paso una propuesta clara. el primero de prueba va sin costo`,`lo armo según el volumen y la duración de los videos. contame cuántos reels querés por semana y te paso una propuesta clara. arrancamos con uno de prueba sin costo`]}),
+ presu:c=>c.a?({o:"Entiendo",v:c.pl?[`entiendo. trabajo con paquetes que se ajustan al volumen de reels que necesiten. si me cuentan cuántos quieren por semana les armo una propuesta que les cierre`,`todo bien, sin presión. si más adelante se da, les paso una propuesta a medida según lo que necesiten`]:[`entiendo. trabajo con paquetes que se ajustan al volumen de reels que necesites. si me contás cuántos querés por semana te armo una propuesta que te cierre`,`todo bien, sin presión. si más adelante se da, te paso una propuesta a medida según lo que necesites`]}):({o:"Entiendo",v:c.pl?[`sin drama. el de prueba se los hago gratis para que vean el resultado, y si más adelante tiene sentido lo charlamos. les sirve así?`,`todo bien. igual el reel de prueba va sin costo, así lo ven sin compromiso. si más adelante se da, charlamos`]:[`sin drama. el de prueba te lo hago gratis para que veas el resultado, y si más adelante tiene sentido lo charlamos. te sirve así?`,`todo bien. igual el reel de prueba va sin costo, así lo ves sin compromiso. si más adelante se da, charlamos`]}),
+ precio:c=>c.a?({o:"",v:c.pl?[`depende de cuántos reels por mes y de la duración, no quiero tirarles un número al aire. cuántos piensan subir por semana más o menos? con eso les paso una propuesta clara`,`lo armo según el volumen y la duración de los videos. cuéntenme cuántos reels quieren por semana y les paso una propuesta clara`]:[`depende de cuántos reels por mes y de la duración, no quiero tirarte un número al aire. cuántos pensás subir por semana más o menos? con eso te paso una propuesta clara`,`lo armo según el volumen y la duración de los videos. contame cuántos reels querés por semana y te paso una propuesta clara`]}):({o:"",v:c.pl?[`depende de cuántos reels por mes y de la duración, no quiero tirarles un número al aire. cuántos piensan subir por semana más o menos? con eso les paso una propuesta clara. el primero de prueba va sin costo`,`lo armo según el volumen y la duración de los videos. cuéntenme cuántos reels quieren por semana y les paso una propuesta clara. arrancamos con uno de prueba sin costo`]:[`depende de cuántos reels por mes y de la duración, no quiero tirarte un número al aire. cuántos pensás subir por semana más o menos? con eso te paso una propuesta clara. el primero de prueba va sin costo`,`lo armo según el volumen y la duración de los videos. contame cuántos reels querés por semana y te paso una propuesta clara. arrancamos con uno de prueba sin costo`]}),
  ejemplos:c=>({o:"",v:[c.pl
   ?`Dale! Acá les comparto el link con mis mejores trabajos, miren el primero tranquilos y me dicen qué les parece:\n${LINK}`
   :`Dale! Acá te comparto el link con mis mejores trabajos, mirate el primero tranquilo y decime qué te parece:\n${LINK}`]}),
  quien:c=>({o:"",v:c.pl?[`soy editor de video, laburo con creadores y marcas armando reels y clips a partir de videos largos. funciona simple: me pasan el material, les devuelvo el video editado y si hay cambios los ajustamos. [AGREGAR TU PLAZO HABITUAL]\nLes dejo mi portafolio:\n${LINK}`,`edito reels y clips para creadores. me mandan el material, yo lo edito y lo ajustamos hasta que quede como quieren. [AGREGAR TU PLAZO HABITUAL]`]:[`soy editor de video, laburo con creadores y marcas armando reels y clips a partir de videos largos. funciona simple: me pasás el material, te devuelvo el video editado y si hay cambios los ajustamos. [AGREGAR TU PLAZO HABITUAL]\nTe dejo mi portafolio:\n${LINK}`,`edito reels y clips para creadores. me mandás el material, yo lo edito y lo ajustamos hasta que quede como querés. [AGREGAR TU PLAZO HABITUAL]`]}),
  equipo:c=>B.editor(c),
  frec:c=>{const r=Math.round(c.fr),a=c.fr>=3?(c.pl?`${r} por semana es un buen ritmo, pero imagino que la edición les come mucho tiempo`:`${r} por semana es un buen ritmo, pero imagino que la edición te come mucho tiempo`):`buen ritmo`;
-   return {o:"Genial",v:c.pl?[`${a}. justamente yo me encargo de esa parte para que puedan subir más sin que les lleve tiempo. les dejo mi portafolio:\n${LINK}`,`${a}. si les copa les armo uno de prueba sin costo`]:[`${a}. justamente yo me encargo de esa parte para que puedas subir más sin que te lleve tiempo. te dejo mi portafolio:\n${LINK}`,`${a}. si te copa te armo uno de prueba sin costo`]}},
+   return {o:"Genial",v:c.pl?[`${a}. justamente yo me encargo de esa parte para que puedan subir más sin que les lleve tiempo. les dejo mi portafolio:\n${LINK}`,c.a?`${a}. si les copa les paso una propuesta`:`${a}. si les copa les armo uno de prueba sin costo`]:[`${a}. justamente yo me encargo de esa parte para que puedas subir más sin que te lleve tiempo. te dejo mi portafolio:\n${LINK}`,c.a?`${a}. si te copa te paso una propuesta`:`${a}. si te copa te armo uno de prueba sin costo`]}},
  pensar:c=>({o:"Obvio",v:c.pl?[`tómense su tiempo, cuando quieran retomamos. les dejo mi portafolio para que lo vean tranquilos:\n${LINK}`,`sin apuro. cuando lo vean me escriben y lo charlamos`]:[`tomate tu tiempo, cuando quieras retomamos. te dejo mi portafolio para que lo veas tranquilo:\n${LINK}`,`sin apuro. cuando lo veas me escribís y lo charlamos`]}),
  otro:c=>({o:"Gracias por contestar",v:c.pl?[`te cuento rápido: edito reels para creadores y marcas. si les interesa les muestro mi portafolio, les sirve?`,`me presento mejor: edito reels y clips para creadores. les dejo mi portafolio para que lo vean:\n${LINK}`]:[`te cuento rápido: edito reels para creadores y marcas. si te interesa te muestro mi portafolio, te sirve?`,`me presento mejor: edito reels y clips para creadores. te dejo mi portafolio para que lo veas:\n${LINK}`]})
 };
@@ -203,7 +234,7 @@ function vary(b,seed){
 function build(p,ks,text,v){
   const raw=text||"",t=nt(raw),pl=g.dmPlural(p,raw),n=pl?"":firstName(p);
   const hs=[...p.u].reduce((a,ch)=>a+ch.charCodeAt(0),0);
-  const c=Object.assign({pl,n,sp:n?" "+n:"",fr:freq(t),niche:(p.n||"").trim().toLowerCase(),lg:p.l==1,seed:hs+v*13+ks.length},sig(raw,t));
+  const c=Object.assign({pl,n,sp:n?" "+n:"",a:globalThis.RADAR_ACCT==="a",fr:freq(t),niche:(p.n||"").trim().toLowerCase(),lg:p.l==1,seed:hs+v*13+ks.length},sig(raw,t));
   const parts=ks.map(k=>Object.assign({k},B[k](c)));
   let seen=false;const bodies=[];
   parts.forEach(x=>{
@@ -241,17 +272,25 @@ const stable=o=>{
 const norm=s=>({
   prospects:(s.prospects||[]).filter(p=>p&&typeof p.u==="string"),
   log:[...new Set((s.log||[]).filter(t=>Date.now()-t<WEEK))].sort((a,b)=>a-b),
+  logA:[...new Set((s.logA||[]).filter(t=>Date.now()-t<WEEK))].sort((a,b)=>a-b),
   limit:s.limit==null?undefined:+s.limit,
   hlimit:s.hlimit==null?undefined:+s.hlimit,
+  limitA:s.limitA==null?undefined:+s.limitA,
+  hlimitA:s.hlimitA==null?undefined:+s.hlimitA,
   setAt:+s.setAt||0
 });
 const pmap=a=>{const m={};a.forEach(p=>m[p.u]=p);return m};
-const sig=s=>stable({p:pmap(s.prospects),l:s.log,limit:s.limit,hlimit:s.hlimit,setAt:s.setAt});
+const sig=s=>stable({p:pmap(s.prospects),l:s.log,lA:s.logA,limit:s.limit,hlimit:s.hlimit,limitA:s.limitA,hlimitA:s.hlimitA,setAt:s.setAt});
 const RANK={todo:0,cont:1,resp:2,int:3,cerr:4,desc:4};
 function newer(a,b){
   const ka=[a.sent||0,a.fud||0,RANK[a.st]||0],kb=[b.sent||0,b.fud||0,RANK[b.st]||0];
   for(let i=0;i<3;i++){if(ka[i]!==kb[i])return ka[i]>kb[i]?a:b}
   return a;
+}
+function mergeLog(Ll,Rl,Bl){
+  const bl=new Set(Bl||[]),ls=new Set(Ll),rs=new Set(Rl),removed=new Set();
+  bl.forEach(t=>{if(!ls.has(t)||!rs.has(t))removed.add(t)});
+  return [...new Set([...Ll,...Rl])].filter(t=>!removed.has(t)).sort((a,b)=>a-b);
 }
 // Fusión de 3 vías: local, remoto y la última foto sincronizada (base)
 function merge(L,R,B){
@@ -268,13 +307,12 @@ function merge(L,R,B){
     }else pick=(l&&r)?newer(l,r):(l||r);
     if(pick)out.push(pick);
   }
-  const bl=new Set(B&&B.log||[]),ls=new Set(L.log),rs=new Set(R.log),removed=new Set();
-  bl.forEach(t=>{if(!ls.has(t)||!rs.has(t))removed.add(t)});
-  const log=[...new Set([...L.log,...R.log])].filter(t=>!removed.has(t)).sort((a,b)=>a-b);
+  const log=mergeLog(L.log,R.log,B&&B.log),logA=mergeLog(L.logA,R.logA,B&&B.logA);
   const lw=L.setAt||0,rw=R.setAt||0,win=rw>lw?R:L,oth=win===R?L:R;
-  return {prospects:out,log,limit:win.limit!=null?win.limit:oth.limit,hlimit:win.hlimit!=null?win.hlimit:oth.hlimit,setAt:Math.max(lw,rw)};
+  const pk=k=>win[k]!=null?win[k]:oth[k];
+  return {prospects:out,log,logA,limit:pk('limit'),hlimit:pk('hlimit'),limitA:pk('limitA'),hlimitA:pk('hlimitA'),setAt:Math.max(lw,rw)};
 }
-const toBase=M=>({map:Object.fromEntries(M.prospects.map(p=>[p.u,stable(p)])),log:[...M.log]});
+const toBase=M=>({map:Object.fromEntries(M.prospects.map(p=>[p.u,stable(p)])),log:[...M.log],logA:[...M.logA]});
 const enc=s=>{const b=new TextEncoder().encode(s);let bin="";for(let i=0;i<b.length;i+=8192)bin+=String.fromCharCode.apply(null,b.subarray(i,i+8192));return btoa(bin)};
 const dec=s=>{const bin=atob(s.replace(/\s/g,""));return new TextDecoder().decode(Uint8Array.from(bin,c=>c.charCodeAt(0)))};
 const H=c=>({"Authorization":"Bearer "+c.token,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"});
@@ -293,7 +331,7 @@ async function getRemote(c){
   return {state:JSON.parse(dec(j.content)),sha:j.sha};
 }
 async function putRemote(c,M,sha){
-  const data={v:1,updated:Date.now(),prospects:M.prospects,log:M.log,limit:M.limit,hlimit:M.hlimit,setAt:M.setAt};
+  const data={v:1,updated:Date.now(),prospects:M.prospects,log:M.log,logA:M.logA,limit:M.limit,hlimit:M.hlimit,limitA:M.limitA,hlimitA:M.hlimitA,setAt:M.setAt};
   const body={message:"sync "+new Date().toISOString(),content:enc(JSON.stringify(data))};
   if(sha)body.sha=sha;
   const r=await fetch(U(c),{method:"PUT",headers:Object.assign({"Content-Type":"application/json"},H(c)),body:JSON.stringify(body)});
@@ -326,8 +364,8 @@ async function run(A){
 function chromeAdapter(){
   const get=k=>new Promise(r=>chrome.storage.local.get(k,r)),set=o=>new Promise(r=>chrome.storage.local.set(o,r));
   return {
-    read:async()=>{const x=await get(["prospects","log","limit","hlimit","setAt"]);return {prospects:x.prospects||[],log:x.log||[],limit:x.limit,hlimit:x.hlimit,setAt:x.setAt||0}},
-    write:async m=>{const o={prospects:m.prospects,log:m.log,setAt:m.setAt};if(m.limit!=null)o.limit=m.limit;if(m.hlimit!=null)o.hlimit=m.hlimit;await set(o)},
+    read:async()=>{const x=await get(["prospects","log","logA","limit","hlimit","limitA","hlimitA","setAt"]);return {prospects:x.prospects||[],log:x.log||[],logA:x.logA||[],limit:x.limit,hlimit:x.hlimit,limitA:x.limitA,hlimitA:x.hlimitA,setAt:x.setAt||0}},
+    write:async m=>{const o={prospects:m.prospects,log:m.log,logA:m.logA,setAt:m.setAt};['limit','hlimit','limitA','hlimitA'].forEach(k=>{if(m[k]!=null)o[k]=m[k]});await set(o)},
     getCfg:async()=>(await get("syncCfg")).syncCfg||null,
     getBase:async()=>(await get("syncBase")).syncBase||null,
     setBase:async b=>set({syncBase:b})
@@ -335,31 +373,40 @@ function chromeAdapter(){
 }
 g.RadarSync={run,merge,norm,sig,toBase,chromeAdapter,stable};
 })(globalThis);
+
 </script>
 <script>
 const KEY="radar_v1",DAY=864e5,HOUR=36e5,WEEK=7*DAY;
-let ST={prospects:[],log:[],limit:25,hlimit:6},view="cola",editU=null,filt="todo",RS={u:"",v:0};
+let ST={prospects:[],log:[],logA:[],limit:25,hlimit:6,limitA:10,hlimitA:3},view="cola",editU=null,filt="todo",RS={u:"",v:0,ge:false};
+/* Cuenta activa de ESTE teléfono: "ciroiar" (personal) o "impactostudio.ar" (agencia). No se sincroniza. */
+const ACCK="radar_acc",IMPACTO="impactostudio.ar";
+let ACC=(()=>{try{return localStorage.getItem(ACCK)||"ciroiar"}catch(e){return"ciroiar"}})();
+const isA=()=>ACC===IMPACTO;
+const setAcctG=()=>{globalThis.RADAR_ACCT=isA()?"a":"p"};setAcctG();
+const LOGC=()=>isA()?ST.logA:ST.log,LIM=()=>isA()?ST.limitA:ST.limit,HLIM=()=>isA()?ST.hlimitA:ST.hlimit;
+const mine=p=>!p.acc||p.acc===ACC;
+const stl=k=>(STG.find(x=>x[0]===k)||[])[1]||k;
 const DUMMY={u:"@",e:"nose",q:3,fr:"sem",l:0,m:0,f:0,g:"med"};
 const STG=[["todo","Por contactar"],["cont","Contactado"],["resp","Respondió"],["int","Interesado"],["cerr","Cerrado ✅"],["desc","Descartado"]];
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-function load(){try{const r=JSON.parse(localStorage.getItem(KEY)||"{}");ST.prospects=r.prospects||[];ST.log=(r.log||[]).filter(t=>Date.now()-t<WEEK);ST.limit=r.limit||25;ST.hlimit=r.hlimit||6;ST.setAt=r.setAt||0}catch(e){}}
+function load(){try{const r=JSON.parse(localStorage.getItem(KEY)||"{}");ST.prospects=r.prospects||[];ST.log=(r.log||[]).filter(t=>Date.now()-t<WEEK);ST.limit=r.limit||25;ST.hlimit=r.hlimit||6;ST.logA=(r.logA||[]).filter(t=>Date.now()-t<WEEK);ST.limitA=r.limitA||10;ST.hlimitA=r.hlimitA||3;ST.setAt=r.setAt||0}catch(e){}}
 function save(quiet){try{localStorage.setItem(KEY,JSON.stringify(ST))}catch(e){toast("No pude guardar. Hacé un backup ya")}if(!quiet)schedSync()}
 function toast(m){const t=$("#toast");t.textContent=m;t.style.opacity=1;clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.opacity=0,1800)}
-const n24=()=>ST.log.filter(t=>Date.now()-t<DAY).length,n1=()=>ST.log.filter(t=>Date.now()-t<HOUR).length;
+const n24=()=>LOGC().filter(t=>Date.now()-t<DAY).length,n1=()=>LOGC().filter(t=>Date.now()-t<HOUR).length;
 const lvl=(n,L)=>n>=L?2:n>=Math.ceil(L*.8)?1:0;
 const find=u=>ST.prospects.find(p=>p.u===u);
-const queue=()=>ST.prospects.filter(p=>p.st==="todo").sort((a,b)=>(a.skip||0)-(b.skip||0)||score(b).s-score(a).s);
-const due=()=>ST.prospects.filter(p=>p.st==="cont"&&p.fu&&p.fu<=Date.now()&&!p.fud);
+const queue=()=>ST.prospects.filter(p=>p.st==="todo"&&mine(p)).sort((a,b)=>(a.skip||0)-(b.skip||0)||score(b).s-score(a).s);
+const due=()=>ST.prospects.filter(p=>p.st==="cont"&&mine(p)&&p.fu&&p.fu<=Date.now()&&!p.fud);
 function head(){
-  const d=n24(),h=n1(),ld=lvl(d,ST.limit),lh=lvl(h,ST.hlimit),w=Math.max(ld,lh),col=["#16a34a","#d97706","#dc2626"];
+  const L=LIM(),HL=HLIM(),d=n24(),h=n1(),ld=lvl(d,L),lh=lvl(h,HL),w=Math.max(ld,lh),col=["#16a34a","#d97706","#dc2626"];
   const msg=ld==2?"🛑 Límite diario alcanzado: frená por hoy.":lh==2?"🛑 Mucho en la última hora: esperá un rato.":ld==1?"⚠️ Cerca del límite diario.":"⚠️ Ritmo alto esta hora: bajá la velocidad.";
-  $("#hd").innerHTML=`<div class="top"><b>🎯 Radar</b><span>24 h <b>${d}/${ST.limit}</b> · 1 h <b>${h}/${ST.hlimit}</b></span></div><div class="bar"><i style="width:${Math.min(100,d/ST.limit*100)}%;background:${col[ld]}"></i></div>`+(w?`<div class="warn" style="color:${col[w]}">${msg}</div>`:"");
+  $("#hd").innerHTML=`<div class="seg"><button data-acc="ciroiar" class="${isA()?"":"on"}">👤 Personal</button><button data-acc="${IMPACTO}" class="${isA()?"on":""}">🏢 Agencia</button></div><div class="top"><b>🎯 Radar</b><span>24 h <b>${d}/${L}</b> · 1 h <b>${h}/${HL}</b></span></div><div class="bar"><i style="width:${Math.min(100,d/L*100)}%;background:${col[ld]}"></i></div>`+(w?`<div class="warn" style="color:${col[w]}">${msg}</div>`:"");
 }
 function limitsOK(){
   const d=n24(),h=n1();
-  if(d>=ST.limit&&!confirm("Ya llegaste al límite diario ("+ST.limit+"). ¿Seguir igual?"))return false;
-  if(h>=ST.hlimit&&!confirm("Ya van "+h+" mensajes en la última hora (sugerido máx. "+ST.hlimit+"). ¿Seguir igual?"))return false;
+  if(d>=LIM()&&!confirm("Ya llegaste al límite diario ("+LIM()+"). ¿Seguir igual?"))return false;
+  if(h>=HLIM()&&!confirm("Ya van "+h+" mensajes en la última hora (sugerido máx. "+HLIM()+"). ¿Seguir igual?"))return false;
   return true;
 }
 function copy(t){
@@ -369,17 +416,18 @@ function copy(t){
 const chatURL=u=>"https://ig.me/m/"+u.slice(1);
 const opt=(arr,val)=>arr.map(([k,l])=>`<option value="${k}"${String(k)===String(val)?" selected":""}>${esc(l)}</option>`).join("");
 const PLO=[["","Trato: auto"],["s","Singular (vos)"],["p","Plural (ustedes)"]];
+const plo=p=>[["","Trato: auto"+(p?" ("+(isPlural(p)?"grupo":"persona")+")":"")],PLO[1],PLO[2]];
 function chips(w){return w.map(x=>`<span class="ch">${esc(x)}</span>`).join("")}
 
 /* ---------- Contactar ---------- */
 function vCola(){
   const q=queue(),du=due(),p=q[0];let h="";
   if(du.length)h+=`<div class="card"><b>🔔 ${du.length} seguimiento${du.length>1?"s":""} pendiente${du.length>1?"s":""}</b><div class="sm">Próximo: ${esc(du[0].u)}</div><button class="btn amb" data-a="fu">Copiar seguimiento y abrir chat</button></div>`;
-  if(!p)h+=`<div class="card"><b>No hay prospectos por contactar.</b><div class="sm">Agregá uno en ⚙️ Más, o restaurá el backup de tu extensión.</div></div>`;
+  if(!p)h+=`<div class="card"><b>No hay prospectos por contactar (${isA()?"agencia":"personal"}).</b><div class="sm">Agregá uno en ⚙️ Más, o restaurá el backup de tu extensión.</div></div>`;
   else{
     const s=score(p),c=s.s>=70?"hi":s.s>=45?"md":"lw";
-    h+=`<div class="card"><div class="r"><div class="sc ${c}">${s.s}</div><div class="b"><a href="https://www.instagram.com/${esc(p.u.slice(1))}/" target="_blank">${esc(p.u)}</a> <span class="sm">${esc(p.n||"")} · ${(+p.f||0).toLocaleString("es-AR")}</span><div>${chips(s.w)}</div></div></div>
-    <div class="row"><select data-c="pl" data-u="${esc(p.u)}">${opt(PLO,p.pl||"")}</select></div>
+    h+=`<div class="card"><div class="r"><div class="sc ${c}">${s.s}</div><div class="b"><a href="https://www.instagram.com/${esc(p.u.slice(1))}/" target="_blank">${esc(p.u)}</a> <span class="sm">${esc(p.n||"")} · ${(+p.f||0).toLocaleString("es-AR")}</span><div>${p.acc?`<span class="ch">@${esc(p.acc)}</span>`:""}${chips(s.w)}</div></div></div>
+    <div class="row"><select data-c="pl" data-u="${esc(p.u)}">${opt(plo(p),p.pl||"")}</select></div>
     <label>Mensaje de apertura (editable) · ${q.length} en cola</label><textarea id="ms" rows="7">${esc(msgs(p).o)}</textarea>
     <button class="btn grn" data-a="open" data-u="${esc(p.u)}">📋 Copiar y abrir chat</button>
     <div class="row"><button class="btn" data-a="skip" data-u="${esc(p.u)}">Saltar</button><button class="btn red" data-a="disc" data-u="${esc(p.u)}">Descartar</button></div>
@@ -393,34 +441,72 @@ function vResp(){
   const ord={cont:0,resp:1,int:2,todo:3,cerr:4,desc:5};
   const L=[...ST.prospects].sort((a,b)=>(ord[a.st]??9)-(ord[b.st]??9));
   $("#v").innerHTML=`<div class="card"><label>Prospecto</label><div class="row"><select id="rp" style="flex:2"><option value="">(no está en mi lista)</option>${L.map(p=>`<option value="${esc(p.u)}"${p.u===RS.u?" selected":""}>${esc(p.u)}${p.n?" · "+esc(p.n):""}</option>`).join("")}</select><select id="rpl">${opt(PLO,"")}</select></div>
-  <label>Lo que te respondió</label><textarea id="rm" rows="4" placeholder="Copiá su mensaje en Instagram y pegalo acá"></textarea>
+  <details id="gd" open style="margin-top:10px"><summary><b>🪝 Mensaje para enviar (gancho)</b></summary>
+   <select id="gk" style="margin-top:8px"><option value="o">Gancho (1.er mensaje)</option><option value="f">Seguimiento (no contestó)</option></select>
+   <textarea id="go" rows="6" style="margin-top:8px"></textarea>
+   <div class="row"><button class="btn grn" data-a="gcc">Copiar y contar envío</button><button class="btn" data-a="gc0">Copiar</button></div>
+   <div class="sm" id="gon"></div></details>
+  <label style="margin-top:14px">Lo que te respondió</label><textarea id="rm" rows="4" placeholder="Copiá su mensaje en Instagram y pegalo acá"></textarea>
   <button class="btn" data-a="paste">📥 Pegar del portapapeles</button>
   <div id="rch" style="margin-top:6px"></div>
   <label>Respuesta sugerida (editable)</label><textarea id="ro" rows="9"></textarea>
   <div class="row"><button class="btn pri" data-a="rcc">Copiar y contar envío</button><button class="btn" data-a="rc0">Copiar</button></div>
   <div class="row"><button class="btn" data-a="rnx">Otra variante</button><a class="btn" id="rop" target="_blank">Abrir chat ↗</a></div>
+  <details id="bd" style="margin-top:10px"><summary><b>🗂️ Banco de respuestas</b></summary><div id="bkl" style="margin-top:6px"></div><div class="sm">Tocá una y se carga en “Respuesta sugerida” para editarla y copiarla.</div></details>
   <div class="sm" id="rnote"></div></div>`;
   refreshResp();
 }
 const curP=()=>find(RS.u)||DUMMY;
+const BRK=/\[[A-ZÁÉÍÓÚ ]+\]/;
+function fillGancho(force){
+  const g=$("#go");if(!g||(RS.ge&&!force))return;
+  const p=curP(),k=$("#gk").value,m=msgs(p),me=isA()?"a":"p";
+  g.value=k==="f"?m.f:m.o;
+  const d=p.sent?Math.floor((Date.now()-p.sent)/DAY):-1;
+  $("#gon").textContent=(p.via&&p.via!==me?"⚠️ A este prospecto le escribiste desde la cuenta "+(p.via==="a"?"agencia":"personal")+" y ahora estás en la otra. ":"")
+   +(k==="o"&&d>=0?"⚠️ Ya le mandaste el gancho "+(d<1?"hoy":"hace "+d+" d")+" ("+stl(p.st)+"). No se lo mandes de nuevo: usá seguimiento o esperá su respuesta. ":"")
+   +(find(p.u)?"":"Este prospecto no está en tu lista: se suma al contador pero no actualiza ninguno.");
+}
+function fillBank(){
+  const b=$("#bkl");if(!b)return;
+  b.innerHTML=replies(curP()).map((r,i)=>`<button class="ch bk" data-a="bk" data-i="${i}">${esc(r.l)}</button>`).join("");
+}
 function refreshResp(){
   const txt=$("#rm").value.trim(),p=curP();
+  $("#rpl").options[0].text="Auto: "+(isPlural(p)?"grupo":"persona");
   $("#rpl").value=p.pl||"";
+  fillGancho();fillBank();
   const op=$("#rop");op.style.display=p.u==="@"?"none":"";if(p.u!=="@")op.href=chatURL(p.u);
-  if(!txt){$("#ro").value="";$("#rch").innerHTML="";$("#rnote").textContent="Pegá el mensaje que te mandó para que arme la respuesta.";return}
+  if(!txt){$("#ro").value="";$("#rch").innerHTML="";$("#rnote").textContent="Pegá el mensaje que te mandó para que arme la respuesta, o elegí una del banco.";return}
   const ks=dmDetect(txt),o=$("#ro");
   $("#rch").innerHTML=chips(["Trato: "+(dmPlural(p,txt)?"plural":"singular"),...ks.map(k=>DM_LABELS[k]),...dmContext(p,txt)]);
   o.value=dmCompose(p,txt,RS.v);
-  $("#rnote").textContent=(ks.includes("no")||ks.includes("stop")?"Al copiar, este prospecto pasa a Descartado. ":"")+(ks.includes("otro")?"No pude clasificarlo: revisá y ajustá a mano. ":"")+(/\[[A-ZÁÉÍÓÚ ]+\]/.test(o.value)?"Completá lo que está entre [corchetes] antes de enviar.":"");
+  $("#rnote").textContent=(ks.includes("no")||ks.includes("stop")?"Al copiar, este prospecto pasa a Descartado. ":"")+(ks.includes("otro")?"No pude clasificarlo: revisá y ajustá a mano. ":"")+(BRK.test(o.value)?"Completá lo que está entre [corchetes] antes de enviar.":"");
 }
 function doReplyCopy(count){
   const t=$("#ro").value.trim();if(!t)return;
   if(count&&!limitsOK())return;
   copy(t);
-  if(count){ST.log.push(Date.now())}
+  if(count){LOGC().push(Date.now())}
   const p=find(RS.u),m=$("#rm").value.trim();
-  if(p&&m){const ks=dmDetect(m);if(ks.includes("no")||ks.includes("stop"))p.st="desc";else if(ks.includes("interesado"))p.st="int";else if(p.st==="cont")p.st="resp"}
+  if(p&&m){if(!p.via)p.via=isA()?"a":"p";const ks=dmDetect(m);if(ks.includes("no")||ks.includes("stop"))p.st="desc";else if(ks.includes("interesado"))p.st="int";else if(p.st==="cont")p.st="resp"}
   save();head();toast(count?"Copiado y contado ✓":"Copiado ✓");
+}
+function copyGancho(count){
+  const t=$("#go").value.trim();if(!t)return;
+  if(count&&!limitsOK())return;
+  copy(t);
+  if(count){
+    LOGC().push(Date.now());
+    const p=find(RS.u);
+    if(p){
+      if(!p.via)p.via=isA()?"a":"p";
+      if($("#gk").value==="o"){if(!p.st||p.st==="todo"){p.st="cont";p.sent=Date.now();p.fu=Date.now()+3*DAY}}
+      else p.fud=Date.now();
+    }
+    save();head();fillGancho(true);
+  }
+  toast(count?"Copiado y contado ✓":"Copiado ✓");
 }
 
 /* ---------- Lista ---------- */
@@ -428,8 +514,8 @@ function vList(){
   const L=ST.prospects.filter(p=>p.st===filt).map(p=>({p,...score(p)})).sort((a,b)=>b.s-a.s);
   $("#v").innerHTML=`<select data-c="flt">${STG.map(([k,l])=>`<option value="${k}"${k===filt?" selected":""}>${l} (${ST.prospects.filter(p=>p.st===k).length})</option>`).join("")}</select><div style="height:10px"></div>`+
   (L.length?L.map(({p,s,w})=>{const c=s>=70?"hi":s>=45?"md":"lw",u=esc(p.u);
-    return `<div class="card"><div class="r"><div class="sc ${c}">${s}</div><div class="b"><a href="https://www.instagram.com/${esc(p.u.slice(1))}/" target="_blank">${u}</a> <span class="sm">${esc(p.n||"")} · ${(+p.f||0).toLocaleString("es-AR")}</span><div>${chips(w)}</div></div></div>
-    <div class="row"><select data-c="st" data-u="${u}">${opt(STG,p.st)}</select><select data-c="pl" data-u="${u}">${opt(PLO,p.pl||"")}</select></div>
+    return `<div class="card"><div class="r"><div class="sc ${c}">${s}</div><div class="b"><a href="https://www.instagram.com/${esc(p.u.slice(1))}/" target="_blank">${u}</a> <span class="sm">${esc(p.n||"")} · ${(+p.f||0).toLocaleString("es-AR")}</span><div>${p.acc?`<span class="ch">@${esc(p.acc)}</span>`:""}${chips(w)}</div></div></div>
+    <div class="row"><select data-c="st" data-u="${u}">${opt(STG,p.st)}</select><select data-c="pl" data-u="${u}">${opt(plo(p),p.pl||"")}</select></div>
     <div class="row"><button class="btn" data-a="toresp" data-u="${u}">💬 Responder</button><button class="btn" data-a="edit" data-u="${u}">✏️ Editar</button><button class="btn red" data-a="rm" data-u="${u}">✕</button></div></div>`}).join(""):`<div class="sm">Nada en esta etapa.</div>`);
 }
 
@@ -448,9 +534,9 @@ function vMas(){
   <div class="row"><div><label>Seguidores</label><input id="f_f" type="number" inputmode="numeric" value="${esc(d.f)}"></div><div><label>¿Quién edita?</label><select id="f_e">${opt([["solo","Edita solo"],["nose","No sé"],["equipo","Tiene equipo"],["pro","Es del rubro"]],d.e)}</select></div></div>
   <div class="row"><div><label>Calidad de edición</label><select id="f_q">${opt([[1,"1 · muy mala"],[2,"2 · mejorable"],[3,"3 · normal"],[4,"4 · buena"],[5,"5 · pro"]],d.q)}</select></div><div><label>Frecuencia</label><select id="f_fr">${opt([["dia","Diaria"],["sem","Semanal"],["irr","Irregular"],["rara","Muy esporádica"]],d.fr)}</select></div></div>
   <div class="row"><div><label>Video largo</label><select id="f_l">${opt([[0,"No"],[1,"Sí"]],d.l)}</select></div><div><label>Monetiza</label><select id="f_m">${opt([[0,"No"],[1,"Sí"]],d.m)}</select></div><div><label>Engagement</label><select id="f_g">${opt([["alto","Alto"],["med","Medio"],["bajo","Bajo"]],d.g)}</select></div></div>
-  <label>Trato</label><select id="f_pl">${opt(PLO,d.pl||"")}</select>
+  <label>Trato</label><select id="f_pl">${opt(plo(p),d.pl||"")}</select>
   <button class="btn pri" data-a="saveform">${p?"Guardar cambios":"Agregar a la cola"}</button>${p?`<button class="btn" data-a="cancel">Cancelar</button>`:""}</div>
-  <div class="card"><h2>Límites</h2><div class="row"><div><label>Máx. por día (24 h)</label><input type="number" inputmode="numeric" data-c="lim" value="${ST.limit}"></div><div><label>Máx. por hora</label><input type="number" inputmode="numeric" data-c="hlim" value="${ST.hlimit}"></div></div>
+  <div class="card"><h2>Límites · ${isA()?"Agencia":"Personal"}</h2><div class="row"><div><label>Máx. por día (24 h)</label><input type="number" inputmode="numeric" data-c="lim" value="${LIM()}"></div><div><label>Máx. por hora</label><input type="number" inputmode="numeric" data-c="hlim" value="${HLIM()}"></div></div>
   <div class="row"><button class="btn" data-a="plus">+1 enviado</button><button class="btn" data-a="minus">−1</button></div>
   <div class="sm">Los mensajes cuentan en una ventana móvil: dejan de sumar 24 h (o 1 h) después de enviados.</div></div>
   <div class="card"><h2>Backup y sincronizar</h2><div class="sm">Compatible con "Copiar backup" / "Restaurar" de tu extensión de Chrome.</div>
@@ -465,7 +551,7 @@ function saveForm(){
   const o={u,dn:$("#f_dn").value.trim(),n:$("#f_n").value.trim(),f:+$("#f_f").value||0,e:$("#f_e").value,q:+$("#f_q").value,fr:$("#f_fr").value,l:+$("#f_l").value,m:+$("#f_m").value,g:$("#f_g").value};
   const pl=$("#f_pl").value;
   if(editU){const p=find(editU);Object.assign(p,o);if(pl)p.pl=pl;else delete p.pl;editU=null;toast("Guardado ✓")}
-  else{if(find(u))return alert("Ese usuario ya está en tu lista");const p={...o,st:"todo"};if(pl)p.pl=pl;ST.prospects.push(p);toast("Agregado ✓")}
+  else{const ex=find(u);if(ex)return alert("Ese usuario ya está en tu lista ("+stl(ex.st)+(ex.acc?" · @"+ex.acc:"")+")");const p={...o,st:"todo",acc:ACC};if(pl)p.pl=pl;ST.prospects.push(p);toast("Agregado ✓")}
   save();render();
 }
 function doImport(replace){
@@ -485,8 +571,8 @@ const getCfg=()=>{try{return JSON.parse(localStorage.getItem(CFGK)||"null")}catc
 let syncTimer=null,syncing=false,SS={t:0,ok:true,msg:""};
 function schedSync(){if(!getCfg())return;clearTimeout(syncTimer);syncTimer=setTimeout(()=>runSync(),6000)}
 const syncA={
-  read:async()=>({prospects:ST.prospects,log:ST.log,limit:ST.limit,hlimit:ST.hlimit,setAt:ST.setAt||0}),
-  write:async m=>{ST.prospects=m.prospects;ST.log=m.log;if(m.limit!=null)ST.limit=m.limit;if(m.hlimit!=null)ST.hlimit=m.hlimit;ST.setAt=m.setAt;save(true)},
+  read:async()=>({prospects:ST.prospects,log:ST.log,logA:ST.logA,limit:ST.limit,hlimit:ST.hlimit,limitA:ST.limitA,hlimitA:ST.hlimitA,setAt:ST.setAt||0}),
+  write:async m=>{ST.prospects=m.prospects;ST.log=m.log;ST.logA=m.logA||[];if(m.limit!=null)ST.limit=m.limit;if(m.hlimit!=null)ST.hlimit=m.hlimit;if(m.limitA!=null)ST.limitA=m.limitA;if(m.hlimitA!=null)ST.hlimitA=m.hlimitA;ST.setAt=m.setAt;save(true)},
   getCfg:async()=>getCfg(),
   getBase:async()=>{try{return JSON.parse(localStorage.getItem(BASEK)||"null")}catch(e){return null}},
   setBase:async b=>{try{localStorage.setItem(BASEK,JSON.stringify(b))}catch(e){}}
@@ -508,17 +594,17 @@ async function runSync(manual){
 function openChat(u){window.open(chatURL(u),"_blank")}
 $("#v").addEventListener("click",async e=>{
   const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,u=b.dataset.u,p=u&&find(u);
-  if(a==="open"&&p){if(!limitsOK())return;copy($("#ms").value);p.st="cont";p.sent=Date.now();p.fu=Date.now()+3*DAY;ST.log.push(Date.now());save();head();openChat(p.u);render()}
-  if(a==="fu"){const q=due()[0];if(!q||!limitsOK())return;copy(msgs(q).f);q.fud=Date.now();ST.log.push(Date.now());save();head();openChat(q.u);render()}
+  if(a==="open"&&p){if(!limitsOK())return;copy($("#ms").value);p.st="cont";p.sent=Date.now();p.fu=Date.now()+3*DAY;if(!p.via)p.via=isA()?"a":"p";LOGC().push(Date.now());save();head();openChat(p.u);render()}
+  if(a==="fu"){const q=due()[0];if(!q||!limitsOK())return;copy(msgs(q).f);q.fud=Date.now();LOGC().push(Date.now());save();head();openChat(q.u);render()}
   if(a==="skip"&&p){p.skip=Date.now();save();render()}
   if(a==="disc"&&p){p.st="desc";save();render()}
   if(a==="rm"&&p&&confirm("¿Borrar "+p.u+"?")){ST.prospects=ST.prospects.filter(x=>x!==p);save();render()}
-  if(a==="toresp"){RS={u,v:0};setView("resp")}
+  if(a==="toresp"){RS={u,v:0,ge:false};setView("resp")}
   if(a==="edit"){editU=u;setView("mas")}
   if(a==="cancel"){editU=null;render()}
   if(a==="saveform")saveForm();
-  if(a==="plus"){ST.log.push(Date.now());save();head();toast("+1")}
-  if(a==="minus"){ST.log.sort((x,y)=>x-y);ST.log.pop();save();head();toast("−1")}
+  if(a==="plus"){LOGC().push(Date.now());save();head();toast("+1")}
+  if(a==="minus"){const l=LOGC();l.sort((x,y)=>x-y);l.pop();save();head();toast("−1")}
   if(a==="sy_save"){
     const repo=$("#s_repo").value.trim(),old=getCfg(),token=$("#s_tok").value.trim()||(old&&old.token)||"";
     if(!/^[\w.-]+\/[\w.-]+$/.test(repo))return alert("Formato del repo: usuario/nombre");
@@ -535,21 +621,30 @@ $("#v").addEventListener("click",async e=>{
   if(a==="rnx"){RS.v++;refreshResp()}
   if(a==="rcc")doReplyCopy(true);
   if(a==="rc0")doReplyCopy(false);
+  if(a==="gcc")copyGancho(true);
+  if(a==="gc0")copyGancho(false);
+  if(a==="bk"){const r=replies(curP())[+b.dataset.i];if(r){$("#ro").value=r.t;$("#rnote").textContent=BRK.test(r.t)?"Completá lo que está entre [corchetes] antes de enviar.":"";$("#ro").scrollIntoView({block:"nearest"})}}
 });
-$("#v").addEventListener("input",e=>{if(e.target.id==="rm"){RS.v=0;refreshResp()}});
+$("#v").addEventListener("input",e=>{if(e.target.id==="rm"){RS.v=0;refreshResp()}if(e.target.id==="go")RS.ge=true});
 $("#v").addEventListener("change",e=>{
   const t=e.target,c=t.dataset.c,p=t.dataset.u&&find(t.dataset.u);
-  if(t.id==="rp"){RS.u=t.value;RS.v=0;refreshResp()}
-  if(t.id==="rpl"){const q=curP();if(t.value)q.pl=t.value;else delete q.pl;if(q!==DUMMY)save();refreshResp()}
+  if(t.id==="rp"){RS.u=t.value;RS.v=0;RS.ge=false;if(!t.value)delete DUMMY.pl;refreshResp()}
+  if(t.id==="gk"){RS.ge=false;fillGancho(true)}
+  if(t.id==="rpl"){const q=curP();if(t.value)q.pl=t.value;else delete q.pl;if(q!==DUMMY)save();RS.ge=false;refreshResp()}
   if(c==="flt"){filt=t.value;render()}
   if(c==="st"&&p){p.st=t.value;save();render()}
   if(c==="pl"&&p){if(t.value)p.pl=t.value;else delete p.pl;save();render()}
-  if(c==="lim"){ST.limit=Math.max(1,+t.value||25);ST.setAt=Date.now();save();head()}
-  if(c==="hlim"){ST.hlimit=Math.max(1,+t.value||6);ST.setAt=Date.now();save();head()}
+  if(c==="lim"){if(isA())ST.limitA=Math.max(1,+t.value||10);else ST.limit=Math.max(1,+t.value||25);ST.setAt=Date.now();save();head()}
+  if(c==="hlim"){if(isA())ST.hlimitA=Math.max(1,+t.value||3);else ST.hlimit=Math.max(1,+t.value||6);ST.setAt=Date.now();save();head()}
 });
 function render(){head();({cola:vCola,resp:vResp,list:vList,mas:vMas})[view]();document.querySelectorAll("#nv button").forEach(b=>b.classList.toggle("on",b.dataset.n===view))}
 function setView(v){view=v;if(v!=="mas")editU=null;render();scrollTo(0,0)}
 $("#nv").addEventListener("click",e=>{const b=e.target.closest("button");if(b)setView(b.dataset.n)});
+$("#hd").addEventListener("click",e=>{
+  const b=e.target.closest("[data-acc]");if(!b||b.dataset.acc===ACC)return;
+  ACC=b.dataset.acc;try{localStorage.setItem(ACCK,ACC)}catch(err){}
+  setAcctG();RS.ge=false;render();toast(isA()?"Cuenta: Agencia":"Cuenta: Personal");
+});
 load();render();setInterval(head,30000);
 if(getCfg())runSync();
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&getCfg())runSync()});
