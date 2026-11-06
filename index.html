@@ -563,6 +563,131 @@ function vStats(){
   <div class="sm">La tabla se pega directo en Google Sheets o Excel. Respondieron, interesados y cerrados se cuentan por fecha desde que instalaste esta versión; el embudo y las tasas usan todo tu historial.</div></div>`;
   $("#st_a").value=STS.acct;$("#st_d").value=String(STS.days);statsFill();
 }
+/* Datos para la planilla de Google (vía Apps Script). Misma lógica en la extensión y en el celu.
+   Depende de eod.js (eodBuild) y stats.js (statsCalc). */
+(function(g){
+if(typeof g.DM_LABELS==="undefined")g.DM_LABELS={stop:"Pidió que no escribas",no:"No le interesa",caro:"Precio / presupuesto",luego:"Más adelante",pensar:"Lo va a pensar",ejemplos:"Pide ejemplos",precio:"Pregunta el precio",gratis:"Pide prueba gratis",oferta:"Qué ofrecés",equipo:"Tiene equipo / editor",solo:"Edita solo",quien:"Quién sos",gracias:"Solo agradeció",interesado:"Interesado",otro:"Sin clasificar",editor:"Tiene editor",presu:"Presupuesto",frec:"Frecuencia"};
+const pad=n=>String(n).padStart(2,"0");
+const fmt=t=>{if(typeof t!=="number")return"";const d=new Date(t);return d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate())+" "+pad(d.getHours())+":"+pad(d.getMinutes())};
+const dkey=t=>fmt(t).slice(0,10);
+const ac=a=>a==="impactostudio.ar"?"a":"p",via=p=>p.via||ac(p.acc);
+const ST={todo:"Por contactar",cont:"Contactado",resp:"Respondió",int:"Interesado",cerr:"Cerrado",desc:"Descartado"};
+const at=(p,k)=>p.at&&p.at[k];
+const yn=b=>b?"Sí":"No";
+const endOf=t=>{const d=new Date(t);d.setHours(23,59,59,999);return d.getTime()};
+
+const PCOLS=["ID","Usuario","Cuenta","Nombre","Nicho","Seguidores","Estado","Tipo de gancho","Gancho enviado","Fecha apertura","Seguimiento (fecha)","Seguimiento (texto)","¿Respondió?","Fecha respuesta","Qué dijo","¿Interesado?","Fecha interés","¿Cerrado?","Fecha cierre","¿Descartado?","Fecha descarte","Guardado el","Última actividad"];
+const DCOLS=["ID","Fecha","Cuenta","Mensajes enviados","Límite diario","Aperturas","Seguimientos","Perfiles nuevos guardados","Respondieron","Interesados","Cerrados","Descartados","Tasa respuesta 7d (%)","Tasa interés 7d (%)","Seguimientos pendientes","Esperando tu respuesta","En cola por contactar"];
+
+function prow(p){
+  const v=via(p),rep=!!(at(p,"rep")||["resp","int","cerr"].includes(p.st)),int=!!(["int","cerr"].includes(p.st)||at(p,"int")),cl=!!(p.st==="cerr"||at(p,"cerr"));
+  const said=(Array.isArray(p.ik)?p.ik:[]).filter(x=>x!=="interesado").map(x=>g.DM_LABELS[x]||x).join(", ");
+  const last=Math.max(p.sent||0,p.fud||0,p.upd||0,p.iat||0,...Object.values(p.at||{}).filter(x=>typeof x==="number"));
+  return [p.u.toLowerCase()+"|"+v,p.u,v==="a"?"Agencia":"Ciro",p.dn||"",p.n||"",p.f||"",ST[p.st]||p.st||"",
+    p.hk?p.hk.k:"",p.hk?p.hk.t:"",fmt(p.sent),fmt(p.fud),p.fk?p.fk.t:"",
+    yn(rep),fmt(at(p,"rep")),said,yn(int),fmt(at(p,"int")),yn(cl),fmt(at(p,"cerr")),yn(p.st==="desc"),fmt(at(p,"desc")),fmt(p.cr||p.ts),last?fmt(last):""];
+}
+// Dos filas por día: Agencia y Ciro (siempre las dos, desde el primer día con actividad)
+function drows(o,date,withLive){
+  const end=endOf(date.getTime()),base={prospects:o.prospects,log:o.log,logA:o.logA,now:end};
+  const key=dkey(end),rows=[];
+  if(o.first==null||key<dkey(o.first))return rows;
+  const P=(o.prospects||[]).filter(p=>p&&p.u);
+  [["a","Agencia",o.limitA||10],["p","Ciro",o.limit||25]].forEach(([k,name,lim])=>{
+    const c=statsCalc({...base,days:1,acct:k}),d=c.D[k],n=f=>d[f][0];
+    const w=statsCalc({...base,days:7,acct:k}).funnel;
+    let due="",wait="",queue="";
+    if(withLive){
+      const mine=P.filter(p=>via(p)===k),dueEnd=end+864e5;
+      due=mine.filter(p=>p.st==="cont"&&p.fu&&!p.fud&&p.fu<dueEnd).length;
+      wait=mine.filter(p=>p.st==="resp").length;
+      queue=P.filter(p=>p.st==="todo"&&(!p.acc||ac(p.acc)===k)).length;
+    }
+    rows.push([key+"|"+k,key,name,n("s"),lim,n("ap"),n("fu"),n("nw"),n("rep"),n("int"),n("cerr"),n("desc"),w.rr==null?"":w.rr,w.ri==null?"":w.ri,due,wait,queue]);
+  });
+  return rows;
+}
+// Qué prospectos mandar: los contactados con actividad reciente (o todos si full)
+function sheetPayload(o){
+  const now=o.now||Date.now(),cut=now-30*864e5,dates=o.dates||[new Date(now)];
+  const P=(o.prospects||[]).filter(p=>p&&p.u&&(p.sent||p.fud||p.hk));
+  const recent=p=>["cont","resp","int"].includes(p.st)||Math.max(p.sent||0,p.fud||0,p.upd||0,p.iat||0,...Object.values(p.at||{}).filter(x=>typeof x==="number"))>=cut;
+  const sel=o.full?P:P.filter(recent);
+  const today=dkey(now),yest=dkey(now-864e5);
+  // primer día con actividad (no se generan filas vacías de antes de que empezaras a usar el Radar)
+  const ts=[...(o.log||[]),...(o.logA||[])];
+  (o.prospects||[]).forEach(p=>{if(!p)return;[p.sent,p.fud,p.cr].forEach(t=>{if(typeof t==="number")ts.push(t)});Object.values(p.at||{}).forEach(t=>{if(typeof t==="number")ts.push(t)})});
+  let first=null;ts.forEach(t=>{if(first===null||t<first)first=t});
+  let drs=[];
+  dates.forEach(d=>{const k=dkey(d.getTime());drs=drs.concat(drows({...o,first},d,k===today||k===yest))});
+  return {v:1,prospects:{cols:PCOLS,rows:sel.map(prow)},daily:{cols:DCOLS,rows:drs},dates:dates.map(d=>dkey(d.getTime()))};
+}
+// Días cuyo reporte toca enviar ahora: hasta 7 días atrás sin enviar, y hoy si ya pasó la hora de corte
+function sheetDue(cfg,sent,now){
+  now=now||new Date();sent=sent||{};
+  const hh=cfg&&cfg.hh!=null?+cfg.hh:23,mm=cfg&&cfg.mm!=null?+cfg.mm:50,out=[];
+  for(let i=7;i>=1;i--){const d=new Date(now);d.setDate(d.getDate()-i);if(!sent[dkey(d.getTime())])out.push(d)}
+  const cut=new Date(now);cut.setHours(hh,mm,0,0);
+  if(now>=cut&&!sent[dkey(now.getTime())])out.push(new Date(now));
+  return out;
+}
+g.sheetPayload=sheetPayload;g.sheetDue=sheetDue;g.sheetDateKey=t=>dkey(t);
+})(globalThis);
+
+/* ---------- Google Sheets (EOD) ---------- */
+function hookKind(p,acct){acct=acct||globalThis.RADAR_ACCT||"p";const t=p.e==="pro"?"del rubro":p.e==="equipo"?"con equipo":"general";return (acct==="a"?"Agencia":"Personal")+" · "+t+" · "+(isPlural(p)?"plural":"singular")}
+const SH_K="radar_sheet",SH_S="radar_sheet_sent",SH_T="radar_sheet_status";
+const lsGet=(k,d)=>{try{const v=JSON.parse(localStorage.getItem(k)||"null");return v==null?d:v}catch(e){return d}};
+const lsSet=(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}};
+let shBusy=false,shTry=0;
+async function shRun(full,manual){
+  const cfg=lsGet(SH_K,null);
+  if(!cfg||!cfg.url||!cfg.secret)return {ok:false,msg:"Falta configurar la URL y la clave"};
+  if(!/^https:\/\/script\.google\.com\/.+\/exec$/.test(cfg.url))return {ok:false,msg:"La URL tiene que ser la de la «Aplicación web» y terminar en /exec (no el ID de implementación ni una que termine en /dev)."};
+  const sent=lsGet(SH_S,{}),now=new Date(),todayK=sheetDateKey(now.getTime());
+  const due=sheetDue(cfg,sent,now),dueK=new Set(due.map(d=>sheetDateKey(d.getTime())));
+  let dates=due.slice();
+  if(manual&&!dueK.has(todayK))dates.push(now);
+  if(full){dates=[];for(let i=30;i>=0;i--){const d=new Date(now);d.setDate(d.getDate()-i);dates.push(d)}}
+  const payload=sheetPayload({prospects:ST.prospects,log:ST.log,logA:ST.logA,limit:ST.limit,limitA:ST.limitA,dates,full:!!full});
+  payload.secret=cfg.secret;
+  const body=JSON.stringify(payload);let confirmed=true,xl="";
+  const ctl=new AbortController(),to=setTimeout(()=>ctl.abort(),120000);
+  try{
+    const res=await fetch(cfg.url,{method:"POST",body,signal:ctl.signal});
+    let j;try{j=JSON.parse(await res.text())}catch(e){throw new Error("La URL no respondió como se esperaba. Revisá que sea la de la aplicación web y que el acceso sea “Cualquier persona”.")}
+    if(!j.ok)throw new Error(j.error||"Error en la planilla");xl=j.excel||"";if(j.url)lsSet("radar_sheet_info",{url:j.url,name:j.nombre||"Radar EOD"});
+  }catch(e){
+    if(e&&e.name==="AbortError")throw new Error("Google tardó más de 2 minutos en responder. Mirá la planilla: si ya tiene datos, el envío funcionó.");
+    if(!(e instanceof TypeError))throw e;                 // red o CORS: reintento sin leer la respuesta
+    await fetch(cfg.url,{method:"POST",mode:"no-cors",body});confirmed=false;
+  }finally{clearTimeout(to)}
+  const s2={...sent};
+  payload.dates.forEach(k=>{if(k<todayK||dueK.has(k))s2[k]=Date.now()});
+  Object.keys(s2).sort().slice(0,-60).forEach(k=>delete s2[k]);
+  lsSet(SH_S,s2);
+  return {ok:true,msg:"Enviado"+(confirmed?"":" (sin confirmación del servidor)")+" · "+payload.prospects.rows.length+" prospectos · "+payload.daily.rows.length+" filas diarias"+(xl?" · "+xl:"")};
+}
+async function shTick(){
+  if(shBusy)return;const cfg=lsGet(SH_K,null);if(!cfg||!cfg.url||!cfg.secret)return;
+  if(Date.now()-shTry<10*60*1000)return;
+  if(!sheetDue(cfg,lsGet(SH_S,{}),new Date()).length)return;
+  shBusy=true;shTry=Date.now();
+  try{const r=await shRun(false,false);lsSet(SH_T,{t:Date.now(),ok:r.ok,msg:r.msg});if(r.ok)shTry=0}
+  catch(e){lsSet(SH_T,{t:Date.now(),ok:false,msg:String(e&&e.message||e)})}
+  finally{shBusy=false;shFill()}
+}
+const shMsg=(t,ok)=>{const e=$("#sh_m");if(e){e.textContent=t;e.style.color=ok===false?"#dc2626":""}};
+function shFill(){
+  const c=lsGet(SH_K,{}),s=lsGet(SH_T,null);if(!$("#sh_u"))return;
+  const inf=lsGet("radar_sheet_info",null),o=$("#sh_o");if(o){if(inf&&inf.url){o.href=inf.url;o.style.display=""}else o.style.display="none"}
+  if(document.activeElement!==$("#sh_u")&&!$("#sh_u").value)$("#sh_u").value=c.url||"";
+  if(document.activeElement!==$("#sh_k")&&!$("#sh_k").value)$("#sh_k").value=c.secret||"";
+  $("#sh_t").value=String(c.hh!=null?c.hh:23).padStart(2,"0")+":"+String(c.mm!=null?c.mm:50).padStart(2,"0");
+  if(s)shMsg((s.ok?"✓ ":"⚠️ ")+s.msg+" · "+new Date(s.t).toLocaleString("es-AR"),s.ok);
+}
+["sh_u","sh_k","sh_t"].forEach(id=>document.addEventListener("input",e=>{if(e.target.id===id)shSave()}));
+function shSave(){const [hh,mm]=($("#sh_t").value||"23:50").split(":").map(Number);lsSet(SH_K,{url:$("#sh_u").value.trim(),secret:$("#sh_k").value.trim(),hh,mm})}
 const queue=()=>ST.prospects.filter(p=>p.st==="todo"&&mine(p)).sort((a,b)=>(a.skip||0)-(b.skip||0)||score(b).s-score(a).s);
 const due=()=>ST.prospects.filter(p=>p.st==="cont"&&mine(p)&&p.fu&&p.fu<=Date.now()&&!p.fud);
 function head(){
@@ -668,8 +793,10 @@ function copyGancho(count){
     const p=find(RS.u);
     if(p){
       if(!p.via)p.via=isA()?"a":"p";
-      if($("#gk").value==="o"){if(!p.st||p.st==="todo"){setSt(p,"cont");p.sent=Date.now();p.fu=Date.now()+3*DAY}}
-      else p.fud=Date.now();
+      if($("#gk").value==="o"){
+        if(!p.hk)p.hk={t,k:hookKind(p,isA()?"a":"p"),a:Date.now()};
+        if(!p.st||p.st==="todo"){setSt(p,"cont");p.sent=Date.now();p.fu=Date.now()+3*DAY}
+      }else{p.fud=Date.now();p.fk={t,a:Date.now()}}
     }
     save();head();fillGancho(true);
   }
@@ -694,6 +821,15 @@ function vMas(){
   <textarea id="eod_t" readonly rows="18" style="margin-top:8px;font:12px ui-monospace,Menlo,monospace"></textarea>
   <button class="btn pri" data-a="eod_copy">Copiar reporte</button>
   <div class="sm">Respondieron, interesados, cerrados y descartados se cuentan por fecha solo desde que instalaste esta versión.</div></div>
+  <div class="card"><h2>☁️ Enviar EOD a Google Sheets</h2>
+  <label>URL de la aplicación web</label><input id="sh_u" placeholder="https://script.google.com/macros/s/…/exec" autocapitalize="off" autocorrect="off">
+  <label>Clave</label><input id="sh_k" type="password" placeholder="La misma que pusiste en el script">
+  <label>Enviar todos los días a las</label><input id="sh_t" type="time" value="23:50">
+  <div class="row"><button class="btn pri" data-a="sh_save">Guardar</button><button class="btn" data-a="sh_now">Enviar ahora</button></div>
+  <button class="btn" data-a="sh_full">Enviar todo el historial</button>
+  <a class="btn" id="sh_o" target="_blank" style="display:none">📂 Abrir mi planilla</a>
+  <div class="sm" id="sh_m"></div>
+  <div class="sm">El envío automático de cada noche lo hace la extensión de la compu. El celu manda cuando tenés esta página abierta (por ejemplo, si la compu estuvo apagada).</div></div>
   <div class="card"><h2>☁️ Sincronización con la compu</h2>
   <label>Repo privado de datos (usuario/nombre)</label><input id="s_repo" value="${esc((getCfg()||{}).repo||"")}" placeholder="iariaciro/radar-datos" autocapitalize="off" autocorrect="off">
   <label>Token de GitHub ${getCfg()?"(guardado ✓, dejalo vacío para no cambiarlo)":""}</label><input id="s_tok" type="password" placeholder="github_pat_…" autocapitalize="off" autocorrect="off">
@@ -715,7 +851,7 @@ function vMas(){
   <button class="btn" data-a="export">📤 Copiar backup</button>
   <label>Pegá un backup para restaurar</label><textarea id="imp" rows="3"></textarea>
   <div class="row"><button class="btn" data-a="merge">Combinar (suma los nuevos)</button><button class="btn red" data-a="replace">Reemplazar todo</button></div></div>`;
-  setSst();eodFill();
+  setSst();eodFill();shFill();
 }
 const normU=s=>{s=String(s||"").trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i,"").replace(/[\/?#].*$/,"").replace(/^@/,"").toLowerCase();return /^[a-z0-9._]{1,30}$/.test(s)?"@"+s:""};
 function saveForm(){
@@ -766,8 +902,8 @@ async function runSync(manual){
 function openChat(u){window.open(chatURL(u),"_blank")}
 $("#v").addEventListener("click",async e=>{
   const b=e.target.closest("[data-a]");if(!b)return;const a=b.dataset.a,u=b.dataset.u,p=u&&find(u);
-  if(a==="open"&&p){if(!limitsOK())return;copy($("#ms").value);setSt(p,"cont");p.sent=Date.now();p.fu=Date.now()+3*DAY;if(!p.via)p.via=isA()?"a":"p";LOGC().push(Date.now());save();head();openChat(p.u);render()}
-  if(a==="fu"){const q=due()[0];if(!q||!limitsOK())return;copy(msgs(q).f);q.fud=Date.now();LOGC().push(Date.now());save();head();openChat(q.u);render()}
+  if(a==="open"&&p){if(!limitsOK())return;const _t=$("#ms").value;copy(_t);setSt(p,"cont");p.sent=Date.now();if(!p.hk)p.hk={t:_t,k:hookKind(p,isA()?"a":"p"),a:Date.now()};p.fu=Date.now()+3*DAY;if(!p.via)p.via=isA()?"a":"p";LOGC().push(Date.now());save();head();openChat(p.u);render()}
+  if(a==="fu"){const q=due()[0];if(!q||!limitsOK())return;const _f=msgs(q).f;copy(_f);q.fud=Date.now();q.fk={t:_f,a:Date.now()};LOGC().push(Date.now());save();head();openChat(q.u);render()}
   if(a==="skip"&&p){p.skip=Date.now();save();render()}
   if(a==="disc"&&p){setSt(p,"desc");save();render()}
   if(a==="rm"&&p&&confirm("¿Borrar "+p.u+"?")){ST.prospects=ST.prospects.filter(x=>x!==p);save();render()}
@@ -794,6 +930,12 @@ $("#v").addEventListener("click",async e=>{
   if(a==="rcc")doReplyCopy(true);
   if(a==="rc0")doReplyCopy(false);
   if(a==="st_csv"){copy(statsCSV(statsOpts()));toast("Tabla copiada ✓")}
+  if(a==="sh_save"){shSave();toast("Guardado ✓");shMsg("Guardado ✓ · se enviará todos los días a las "+$("#sh_t").value)}
+  if(a==="sh_now"||a==="sh_full"){
+    if(a==="sh_full"&&!confirm("Esto manda todo tu historial de contactados (últimos 30 días de reportes diarios). ¿Seguir?"))return;
+    shSave();shMsg("Enviando…");
+    shRun(a==="sh_full",true).then(r=>{lsSet(SH_T,{t:Date.now(),ok:r.ok,msg:r.msg});shMsg((r.ok?"✓ ":"⚠️ ")+r.msg,r.ok);shFill()}).catch(e=>{const m=String(e&&e.message||e);lsSet(SH_T,{t:Date.now(),ok:false,msg:m});shMsg("⚠️ "+m,false)});
+  }
   if(a==="eod_copy"){eodFill();copy($("#eod_t").value);toast("Reporte copiado ✓")}
   if(a==="gcc")copyGancho(true);
   if(a==="gc0")copyGancho(false);
@@ -822,6 +964,8 @@ $("#hd").addEventListener("click",e=>{
   setAcctG();RS.ge=false;render();toast(isA()?"Cuenta: Agencia":"Cuenta: Personal");
 });
 load();render();setInterval(head,30000);
+setTimeout(shTick,4000);setInterval(shTick,5*60*1000);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)shTick()});
 if(getCfg())runSync();
 document.addEventListener("visibilitychange",()=>{if(!document.hidden&&getCfg())runSync()});
 setInterval(()=>{if(!document.hidden&&getCfg())runSync()},90000);
